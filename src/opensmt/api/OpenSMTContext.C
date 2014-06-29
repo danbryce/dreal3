@@ -817,11 +817,11 @@ void OpenSMTContext::PrintResult( const lbool & result, const lbool & config_sta
 #endif
     if (config.produce_stats){
       for( auto t : getEgraphP()->getTSolvers()){
-        dreal::nra_solver* nra = dynamic_cast<dreal::nra_solver*>(t);
-        if(nra){
-          //out << "nodes: " << solver.decisions << " " << nra->decisions() << endl;
-          break;
-        }
+	dreal::nra_solver* nra = dynamic_cast<dreal::nra_solver*>(t);
+	if(nra && config.nra_output_num_nodes){
+	  out << "nodes: " << solver.decisions << " " << nra->decisions() << endl;
+	  break;
+	}
       }
     }
 

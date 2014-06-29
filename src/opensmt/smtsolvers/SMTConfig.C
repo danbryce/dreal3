@@ -39,6 +39,7 @@ DEFINE_uint64(ode_timeout,          0, "ode timeout");
 DEFINE_bool  (ode_cache,        false, "ode cache");
 DEFINE_bool  (ode_forward_only, false, "ode forward only");
 DEFINE_bool  (ode_parallel,     false, "ode parallel");
+DEFINE_bool  (ode_sim_heuristic,false, "ode sim heuristic");
 DEFINE_bool  (proof,            false, "proof");
 DEFINE_bool  (readable_proof,   false, "readable proof");
 DEFINE_bool  (model,            false, "model");
@@ -50,6 +51,7 @@ DEFINE_uint64(aggressive,           0, "number of samples to use for aggressive 
 DEFINE_uint64(sample,               0, "number of samples to use for sound sampling");
 DEFINE_uint64(multiple_soln,        1, "maximum number of solutions to find");
 DEFINE_bool  (polytope,         false, "use polytope contractor in IBEX");
+DEFINE_bool  (output_num_nodes, false, "output number of SAT and ICP nodes");
 
 void
 SMTConfig::initializeConfig( )
@@ -128,16 +130,21 @@ SMTConfig::initializeConfig( )
   nra_ODE_step                 = 0.0;
   nra_ODE_contain              = false;
   nra_ODE_timeout              = 0.0;
+  nra_ODE_sim_heuristic        = true;
   nra_json                     = false;
   nra_delta_test               = false;
   nra_use_delta_heuristic      = false;
   nra_short_sat                = false;
   nra_bmc_heuristic            = "";
+<<<<<<< HEAD
   nra_aggressive               = 0;
   nra_sample                   = 0;
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
+=======
+  nra_output_num_nodes         = false;
+>>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
 }
 
 void SMTConfig::parseConfig ( char * f )
@@ -372,17 +379,26 @@ SMTConfig::parseCMDLine( int /* argc */
   nra_ODE_cache           = FLAGS_ode_cache;
   nra_ODE_forward_only    = FLAGS_ode_forward_only;
   nra_ODE_parallel        = FLAGS_ode_parallel;
+<<<<<<< HEAD
   nra_readable_proof      = FLAGS_readable_proof;
   nra_proof               = nra_readable_proof || FLAGS_proof;
+=======
+  nra_ODE_sim_heuristic   = FLAGS_ode_sim_heuristic;
+  nra_proof               = FLAGS_proof;
+>>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
   nra_model               = FLAGS_model;
   nra_json                = FLAGS_visualize;
   nra_verbose             = FLAGS_verbose || FLAGS_debug;
   nra_debug               = FLAGS_debug;
+<<<<<<< HEAD
   nra_stat                = FLAGS_stat;
   nra_aggressive          = FLAGS_aggressive;
   nra_sample              = FLAGS_sample;
   nra_multiple_soln       = FLAGS_multiple_soln;
   nra_polytope            = FLAGS_polytope;
+=======
+  nra_output_num_nodes    = FLAGS_output_num_nodes;
+>>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
 
   if (nra_proof) {
       /* Open file stream */

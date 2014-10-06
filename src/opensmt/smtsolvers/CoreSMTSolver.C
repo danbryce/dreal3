@@ -1710,6 +1710,26 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
           }
         }
 
+        bool isSAT = false;
+        if(config.nra_short_sat){
+          //check if SAT, even if not all literals are assigned
+          isSAT = true;
+          for (int c = 0; c < nClauses(); c++) {
+            if (!satisfied(*clauses[c])) {
+              isSAT = false;
+              break;
+            }
+          }
+          if( isSAT ){
+            DREAL_LOG_DEBUG << "CoreSMTSolver::search() Found Model after # decisions " << decisions << endl;
+            //first_model_found = true;
+            next = lit_Undef;
+          }
+          else{
+            DREAL_LOG_DEBUG << "CoreSMTSolver::search() not SAT yet" << endl;
+          }
+        }
+
         if (next == lit_Undef){
           // New variable decision:
           decisions++;

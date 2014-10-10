@@ -340,6 +340,27 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 endif()
 
 ################################################################
+# CAPD LIB
+################################################################
+set(EXTRA_LIBS ${EXTRA_LIBS} "-lcapddynsysfacade -lcapdcovrel -lcapddiffIncl -lcapdpoincare -lcapddiffAlgebra -lcapddynsys -lcapdmap -lcapddynset -lcapdgeomset -lcapdalgfacade -lcapdmatrixAlgorithms -lcapdvectalg -lprim -lcapdintervals -lcapdrounding -lcapdbasicalg -lcapdauxil -lcapdalglib")
+set(ODE_ENABLED TRUE)
+
+################################################################
+# FILIB LIB
+################################################################
+set(EXTRA_LIBS ${EXTRA_LIBS} "-lprim")
+
+################################################################
+# PTHREAD LIB
+################################################################
+set(EXTRA_LIBS ${EXTRA_LIBS} "-lpthread")
+
+################################################################
+# FLOW STAR REQUIRED LIBS
+################################################################
+set(EXTRA_LIBS ${EXTRA_LIBS} "-lmpfr -lgmp -lgsl -lgslcblas -lm -lglpk")
+
+################################################################
 # EGLIBC (Optional)
 ################################################################
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")

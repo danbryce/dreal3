@@ -354,6 +354,10 @@ public:
   std::unordered_map<string, dreal::flow> flow_maps;
   bool                                    stepped_flows; //Does flow name have step index?
 
+  //taylor model maps
+  //flowstar doesn't seem to be using pointers for Taylormodels
+  TaylorModelVec *tmVec;
+  std::unordered_map<string, std::unordered_map<string, TaylorModel *>> tm_maps;
 private:
 
   vector< Enode * > interface_terms;

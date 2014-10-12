@@ -22,6 +22,9 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "egraph/Egraph.h"
 #include "sorts/SStore.h"
 #include "api/OpenSMTContext.h"
+#include "dsolvers/taylormodels/Continuous.h"
+//#include "dsolvers/taylormodels/Constraints.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
@@ -45,6 +48,15 @@ void smt2error( const char * s )
   printf( "At line %d: %s\n", smt2lineno, s );
   exit( 1 );
 }
+
+//for Taylor models
+extern int lineNum;
+extern mpfr_prec_t intervalNumPrecision;
+extern ContinuousReachability continuousProblem;
+extern ParseSetting parseSetting;
+extern ParseResult parseResult;
+extern vector<Interval> gUncertainties;
+void parseError(const char *str, int lnum);
 
 /* Overallocation to prevent stack overflow */
 #define YYMAXDEPTH 1024 * 1024

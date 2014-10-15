@@ -202,6 +202,8 @@ public:
   Enode * mkForall ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
   Enode * mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
 
+  Enode * mkConnect	     ( Enode *, const char *);
+  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, Enode * holder_list);
   /* ----------------- */
 
   Enode * mkSelect           ( Enode *, Enode * );

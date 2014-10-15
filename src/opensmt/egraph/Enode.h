@@ -129,8 +129,13 @@ public:
   inline bool isDistinct          ( ) const { return hasSymbolId( ENODE_ID_DISTINCT    ); }
   inline bool isForallT           ( ) const { return hasSymbolId( ENODE_ID_FORALLT     ); }
   inline bool isIntegral          ( ) const { return hasSymbolId( ENODE_ID_INTEGRAL    ); }
+<<<<<<< HEAD
   inline bool isForall            ( ) const { return hasSymbolId( ENODE_ID_FORALL      ); }
   inline bool isExists            ( ) const { return hasSymbolId( ENODE_ID_EXISTS      ); }
+=======
+  inline bool isConnect		  ( ) const { return hasSymbolId( ENODE_ID_CONNECT     ); }
+  inline bool isPIntegral          ( ) const { return hasSymbolId( ENODE_ID_PINTEGRAL    ); }
+>>>>>>> a091b8f... built connect and pintegral at the egraph level. next is icp_solver
   /*
   inline bool isBvslt             ( ) const { return hasSymbolId( ENODE_ID_BVSLT       ); }
   inline bool isBvsgt             ( ) const { return hasSymbolId( ENODE_ID_BVSGT       ); }

@@ -202,8 +202,9 @@ public:
   Enode * mkForall ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
   Enode * mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
 
-  Enode * mkConnect	     ( Enode *, const char *);
-  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, Enode * holder_list);
+  Enode * mkConnect	     ( const char *, const char *);
+  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, 
+                                vector<char *> * holder_list);
   /* ----------------- */
 
   Enode * mkSelect           ( Enode *, Enode * );
@@ -250,6 +251,8 @@ public:
   Enode * mkNum              ( const char *, const char * );
   Enode * mkNum              ( const double );
   Enode * mkFun              ( const char *, Enode * );
+
+  Enode * mkName	     (const char *); 
 
   void    mkDefine           ( const char *, Enode * );
   Enode * mkLet              ( Enode * );

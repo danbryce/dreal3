@@ -64,7 +64,7 @@ void parseError(const char *str, int lnum);
 %union
 {
   char  *                            str;
-  vector< string > *                 str_list;
+  vector< char * > *                 str_list;
   pair<string, Enode *> *            ode;
   vector<pair<string, Enode *> * > * ode_list;
   Enode *                            enode;
@@ -107,9 +107,17 @@ void parseError(const char *str, int lnum);
 %token TK_ATAN2 TK_MATAN TK_SAFESQRT TK_INTEGRAL TK_SQRT TK_MIN TK_MAX
 
 %type <str> precision
-
+%type <str_list> holder_list
 %type <str> TK_NUM TK_DEC TK_HEX TK_STR TK_SYM TK_KEY numeral decimal hexadecimal /*binary*/ symbol
+<<<<<<< HEAD
 %type <str> identifier spec_const b_value s_expr
+=======
+%type <str> identifier spec_const b_value s_expr holder
+%type <str> TK_LEQ TK_GEQ TK_LT TK_GT TK_FORALLT
+%type <str> TK_PLUS TK_MINUS TK_TIMES TK_UMINUS TK_DIV
+%type <str> TK_EXP TK_SIN TK_COS TK_ASIN TK_ACOS TK_LOG TK_TAN TK_ATAN TK_POW TK_SINH TK_COSH TK_TANH TK_ABS
+%type <str> TK_ATAN2 TK_MATAN TK_SAFESQRT TK_INTEGRAL
+>>>>>>> 223fe50... temp
 
 /* %type <str_list> numeral_list */
 %type <enode> term_list term
@@ -135,12 +143,14 @@ ode_list: ode_list ode
             $$->push_back( $1 );
           }
 ;
+
 ode: '(' TK_EQ TK_DDT TK_LB identifier TK_RB term ')'  {
         $$ = new pair<string, Enode*>;
         $$->first = $5;
         $$->second = $7;
         free($5);
 }
+;
 
 command_list: command_list command | command ;
 
@@ -328,6 +338,25 @@ symbol: TK_SYM
         { $$ = $1; }
       ;
 
+
+holder_list: holder_list holder
+            {
+              $1 -> push_back($2);
+              $$ = $1;
+            }
+            | holder
+            {
+              $$ = new vector<char *>;
+              $$ -> push_back($1);
+            }
+            ;
+
+holder: identifier
+        { $$ = $1; }
+        ;
+
+
+
 /* symbol_list: symbol_list symbol | symbol ; */
 
 /* attribute_value: spec_const { free($1); } | TK_SYM | '(' s_expr_list ')' | '(' ')' ; */
@@ -387,17 +416,17 @@ term: spec_const
         $$ = parser_ctx->mkIntegral( $8, $9, $11, $4, $13 );
         free( $13 );
       }
-    | '(' TK_CONNECT term identifier ')'
+    | '(' TK_CONNECT identifier identifier')'
       { $$ = parser_ctx->mkConnect($3, $4); } 
 
     | '(' TK_EQ TK_LB term_list TK_RB
-		'('  TK_PINTEGRAL term term TK_LB term_list TK_RB term_list ')' 
+		'('  TK_PINTEGRAL term term TK_LB term_list TK_RB TK_LB holder_list TK_RB ')' 
       ')'
 	/* note that the last argument allows fully or partial specified ODEs. 
 		need to check during make. */
       {
-	$$ = parser_ctx->mkPIntegral( $8, $9, $11, $4, $13);
-	free($13);
+	       $$ = parser_ctx->mkPIntegral( $8, $9, $11, $4, $14);
+	       free($14);
       }
 
     | '(' TK_EQ term_list precision ')'

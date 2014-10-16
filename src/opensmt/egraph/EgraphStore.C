@@ -159,11 +159,17 @@ void Egraph::initializeStore( )
   newSymbol( "sqrt"      , sarith1 ); assert( ENODE_ID_SQRT == id_to_enode.size( ) - 1 );
   newSymbol( "forallt"   , sarith1_bool ); assert( ENODE_ID_FORALLT == id_to_enode.size( ) - 1 );
   newSymbol( "integral"  , sarith5_bool ); assert( ENODE_ID_INTEGRAL == id_to_enode.size( ) - 1 );
+<<<<<<< HEAD
   newSymbol( "abs"       , sarith1 ); assert( ENODE_ID_ABS == id_to_enode.size( ) - 1 );
   newSymbol( "min"       , sarith2_left ); assert( ENODE_ID_MIN == id_to_enode.size( ) - 1 );
   newSymbol( "max"       , sarith2_left ); assert( ENODE_ID_MAX == id_to_enode.size( ) - 1 );
   newSymbol( "forall"    , sbool2 ); assert( ENODE_ID_FORALL == id_to_enode.size( ) - 1 );
   newSymbol( "exists"    , sbool2 ); assert( ENODE_ID_EXISTS == id_to_enode.size( ) - 1 );
+=======
+  newSymbol( "connect"   , sarith2_bool ); assert(ENODE_ID_CONNECT == id_to_enode.size() -1);
+  newSymbol( "pintegral"  , sarith5_bool ); assert( ENODE_ID_INTEGRAL == id_to_enode.size( ) - 1 );
+  newSymbol( "abs"       , sarith1 ); assert( ENODE_ID_ABS    == id_to_enode.size( ) - 1 );
+>>>>>>> 98dc2bf... temp
   /* ---------------- */
 
  //

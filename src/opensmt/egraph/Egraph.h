@@ -203,8 +203,7 @@ public:
   Enode * mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
 
   Enode * mkConnect	     ( const char *, const char *);
-  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, 
-                                char * holder);
+  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, vector<char *> * holder);
   /* ----------------- */
 
   Enode * mkSelect           ( Enode *, Enode * );

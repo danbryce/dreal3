@@ -37,6 +37,7 @@ Enode::Enode( )
 {
   setEtype( ETYPE_LIST );
   // dynamic = this;
+  isHolder = false;
 }
 //
 // Constructor for new Symbols
@@ -58,6 +59,7 @@ Enode::Enode( const enodeid_t      id_
   setArity( sort_->getArity( ) - 1 ); // Sort arity includes return value ...
   symb_data = new SymbData( name_, etype_, sort_ );
   // dynamic = this;
+  isHolder = false;
 }
 //
 // Constructor for new Terms/Lists
@@ -79,6 +81,9 @@ Enode::Enode( const enodeid_t id_
   assert( cdr );
   assert( car->isTerm( ) || car->isSymb( ) || car->isNumb( ) );
   assert( cdr->isList( ) );
+  
+  isHolder = false;
+ 
   //
   // If car is term, then this node is a list
   //
@@ -131,7 +136,9 @@ Enode::Enode( const enodeid_t	id_
   , value      ( NULL )
   , precision  ( 0.0 )
   // , dynamic   ( NULL )
-{ }
+{
+   isHolder = false;
+}
 
 Enode::~Enode ( )
 {

@@ -31,6 +31,32 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #ifdef PRODUCE_PROOF
 #include "proof/UFInterpolator.h"
 #endif
+/*
+//for Taylor models
+extern int lineNum;
+extern mpfr_prec_t intervalNumPrecision;
+extern ContinuousReachability continuousProblem;
+extern ParseSetting parseSetting;
+extern ParseResult parseResult;
+extern vector<Interval> gUncertainties;
+*/
+/*
+double dblVal;
+vector<Interval> *intVec;
+vector<int> *iVec;
+vector<double> *dVec;
+vector<Monomial> *monoVector;
+vector<Polynomial> *polyVec;
+Monomial *mono;
+Polynomial *poly;
+TaylorModelVec *tmVec;
+Matrix *mat;
+vector<vector<double> > *dVecVec;
+Flowpipe *pFlowpipe;
+TaylorModel *ptm;
+Interval *pint;
+vector<string> *strVec;
+*/
 
 class Egraph : public CoreTSolver
 {
@@ -362,8 +388,8 @@ public:
 
   //taylor model maps
   //flowstar doesn't seem to be using pointers for Taylormodels
-  TaylorModelVec *tmVec;
-  std::unordered_map<string, std::unordered_map<string, TaylorModel *>> tm_maps;
+//  TaylorModelVec *tmVec;
+//  std::unordered_map<string, std::unordered_map<string, TaylorModel *>> tm_maps;
 
 private:
 

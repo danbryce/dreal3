@@ -22,7 +22,6 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "egraph/Egraph.h"
 #include "sorts/SStore.h"
 #include "api/OpenSMTContext.h"
-#include "dsolvers/taylormodels/Continuous.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -47,16 +46,6 @@ void smt2error( const char * s )
   printf( "At line %d: %s\n", smt2lineno, s );
   exit( 1 );
 }
-
-//for Taylor models
-extern int lineNum;
-extern mpfr_prec_t intervalNumPrecision;
-extern ContinuousReachability continuousProblem;
-extern ParseSetting parseSetting;
-extern ParseResult parseResult;
-extern vector<Interval> gUncertainties;
-void parseError(const char *str, int lnum);
-
 /* Overallocation to prevent stack overflow */
 #define YYMAXDEPTH 1024 * 1024
 %}
@@ -109,15 +98,7 @@ void parseError(const char *str, int lnum);
 %type <str> precision
 %type <str_list> holder_list
 %type <str> TK_NUM TK_DEC TK_HEX TK_STR TK_SYM TK_KEY numeral decimal hexadecimal /*binary*/ symbol
-<<<<<<< HEAD
 %type <str> identifier spec_const b_value s_expr
-=======
-%type <str> identifier spec_const b_value s_expr holder
-%type <str> TK_LEQ TK_GEQ TK_LT TK_GT TK_FORALLT
-%type <str> TK_PLUS TK_MINUS TK_TIMES TK_UMINUS TK_DIV
-%type <str> TK_EXP TK_SIN TK_COS TK_ASIN TK_ACOS TK_LOG TK_TAN TK_ATAN TK_POW TK_SINH TK_COSH TK_TANH TK_ABS
-%type <str> TK_ATAN2 TK_MATAN TK_SAFESQRT TK_INTEGRAL
->>>>>>> 223fe50... temp
 
 /* %type <str_list> numeral_list */
 %type <enode> term_list term
@@ -179,10 +160,6 @@ command: '(' TK_SETLOGIC symbol ')'
        | '(' TK_DECLAREFUN symbol '(' ')' sort ')'
          {
             parser_ctx->DeclareFun( $3, $6 ); free( $3 );
-
-	    //add into taylor model
-	   // !continuousProblem.declareStateVar(*symbol);
-
           }
        | '(' TK_DECLARECONST symbol sort ')'
          {

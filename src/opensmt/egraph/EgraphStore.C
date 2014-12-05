@@ -978,6 +978,12 @@ Enode * Egraph::mkPlus( Enode * args )
   //
   // Simplify constants
   //
+  if (x->isConstant() && x->getValue() == 0.0) {
+      return y;
+  } else if (y->isConstant() && y->getValue() == 0.0) {
+      return x;
+  }
+  
   if ( x->isConstant( ) && y->isConstant( ) && args->getArity( ) == 2 )
   {
     const double xval = x->getValue( );
@@ -1007,6 +1013,13 @@ Enode * Egraph::mkMinus( Enode * args )
 
   Enode * x = args->getCar( );
   Enode * y = args->getCdr( )->getCar( );
+
+  if (x->isConstant() && x->getValue() == 0.0) {
+      return mkUminus(args->getCdr());
+  } else if (y->isConstant() && y->getValue() == 0.0) {
+      return x;
+  }
+  
   Enode * mo = mkNum( "-1" );
 
   res = mkPlus( cons( x, cons( mkTimes( cons( mo, cons( y ) ) ) ) ) );
@@ -1022,7 +1035,7 @@ Enode * Egraph::mkUminus( Enode * args )
   Enode * x = args->getCar( );
   Enode * mo = mkNum( "-1" );
 
-  return mkTimes( cons( mo, cons( x ) ) );
+  return mkTimes( cons( mo, cons(x) ) );
 }
 
 Enode * Egraph::mkTimes( Enode * args )

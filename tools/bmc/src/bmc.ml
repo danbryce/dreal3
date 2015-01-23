@@ -91,10 +91,10 @@ let process_flow_pruned ~k ~q (varmap : Vardeclmap.t) (modemap:Modemap.t) (relev
   let m = Map.find q modemap in
   let mode_formula = make_mode_cond ~k ~q in
   let not_mode_formula = Basic.make_and(
-			     List.map (fun nm -> if nm = q then 
+			     List.map (fun nm -> if nm = q then
 					       Basic.True
 					     else
-					       Basic.Not (make_mode_cond k nm) 
+					       Basic.Not (make_mode_cond k nm)
 				  )
 				  (List.of_enum (Map.keys modemap))) in
   let time_var = (make_variable k "" "time") in
@@ -147,10 +147,9 @@ let process_flow_pruned ~k ~q (varmap : Vardeclmap.t) (modemap:Modemap.t) (relev
   Basic.make_and ([mode_formula; not_mode_formula; flow_formula; inv_formula])
 
 (** transition change **)
-let process_jump (modemap : Modemap.t) (q : Mode.id) (next_q : Mode.id) k : Basic.formula =
+let process_jump (modemap : Modemap.t) (q : Mode.id) (jump : Jump.t) k : Basic.formula =
+  let next_q = jump.Jump.target in
   let mode = Map.find q modemap in
-  let jumpmap = mode.jumpmap in
-  let jump = Map.find next_q jumpmap in
   let mode_formula = make_mode_cond ~k:(k+1) ~q:next_q in
   let gurad' = Basic.subst_formula (make_variable k "_t") jump.guard in
   let precision = Jump.precision jump in
@@ -197,10 +196,10 @@ let process_jump_pruned (modemap : Modemap.t) (q : Mode.id) (next_q : Mode.id) (
   let jump = Map.find next_q jumpmap in
   let mode_formula = make_mode_cond ~k:(k+1) ~q:next_q in
   let not_mode_formula = Basic.make_and(
-			     List.map (fun nm -> if nm = next_q then 
+			     List.map (fun nm -> if nm = next_q then
 					       Basic.True
 					     else
-					       Basic.Not (make_mode_cond (k+1) nm) 
+					       Basic.Not (make_mode_cond (k+1) nm)
 				  )
 				  (List.of_enum (Map.keys modemap))) in
   let gurad' = Basic.subst_formula (make_variable k "_t") jump.guard in
@@ -336,13 +335,10 @@ let process_step (varmap : Vardeclmap.t)
        try
          let flow_for_q = process_flow ~k:step ~q varmap modemap in
          let mode_q = Map.find q modemap in
-         let jumpmap_q = mode_q.jumpmap in
-         let list_of_nq = List.of_enum (Map.keys jumpmap_q) in
-         let jump_for_q_nq  = Basic.make_or (List.map
-                                               (fun nq ->
-                                                process_jump modemap q nq step
-                                               )
-                                               list_of_nq)
+         let jump_for_q_nq  =
+           Basic.make_or (List.map
+                            (fun j -> process_jump modemap q j step)
+                            (Mode.jumps mode_q))
          in
          Basic.make_and [flow_for_q; jump_for_q_nq]
        with e ->

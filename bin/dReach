@@ -41,7 +41,6 @@ OPTIONS:
                                 51 if SAT,
                                 52 if UNSAT,
                                 1 abnormal termination
-
 EXAMPLE:
 
    dReach -k 10      bouncing_ball.drh --verbose --precision=0.001 --visualize

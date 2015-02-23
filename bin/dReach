@@ -1,3 +1,4 @@
+#This version is slightly modified by Fedor Shmarov (FS) (email: f.shmarov@ncl.ac.uk)
 #!/usr/bin/env bash
 #This version is slightly modified by Fedor Shmarov (FS) (email: f.shmarov@ncl.ac.uk)
 
@@ -7,7 +8,7 @@ SCRIPT_PATH="$( cd "$( dirname "${SCRIPT_PATHNAME}" )" && pwd )"
 # TODO: Specify the paths for BMC tool and DREAL
 for BMC_NAME in bmc bmc_main.native; do
     BMC=${SCRIPT_PATH}/${BMC_NAME}
-    if [ -e ${BMC} ] ; then
+    if [ -e ${BMC} ] ; then 
         break
     fi
 done
@@ -23,6 +24,8 @@ usage: $0 options <*.drh> <options to dReal>
 
 dReach: Bounded Model Checking for for Nonlinear Hybrid Systems
 
+
+
 OPTIONS:
 
    -k <N> / -u <N>  specify the upperbound of unrolling steps (default: 3)
@@ -37,8 +40,8 @@ OPTIONS:
 
    -d               disjunctive path encoding (default: do not use)
 
-   -z               apply exit codes (default: do not use):
-                                51 if SAT,
+   -z               apply exit codes (default: do not use): 
+                                51 if SAT, 
                                 52 if UNSAT,
                                 1 abnormal termination
 EXAMPLE:
@@ -240,7 +243,7 @@ do
                         rm $PDRH                                                #
                         exit 1                                                  #
                     fi                                                          #
-                else
+                else                                                            
                     ${SOLVER} ${SOLVER_OPT} ${SMT} --short_sat 2>&1 | tee $OUT
                 fi
                 RESULT=`tail -n 1 $OUT`

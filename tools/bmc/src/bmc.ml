@@ -17,7 +17,8 @@ open Relevantvariables
 exception SMTException of string
 
 type ode = Ode.t
-type flows_annot = (int * ode list)  (** step, ode **)
+type flows_annot = (string * ode list)  (** step, ode **)
+type comppath = Network.comppath
 
 let global_vars = ref []
 
@@ -27,8 +28,10 @@ let make_variable k suffix (s: string) : string =
   (String.join "_" [s; str_step;]) ^ suffix
 
 (* assert for mode *)
+(*let make_mode_cond ~k ~q =
+  Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Num (float_of_int q))*)
 let make_mode_cond ~k ~q =
-  Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Num (float_of_int q))
+  Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Var q)
 
 (** assert for initial state and invariant **)
 let process_init ~init_id ~init_formula =
@@ -360,7 +363,7 @@ let process_step_pruned (varmap : Vardeclmap.t)
 (** generate logic formula for each step 0...k **)
 let process_step (varmap : Vardeclmap.t)
                  (modemap : Modemap.t)
-                 (mode : int option)
+                 (mode : string option)
                  (step : int)
     : Basic.formula =
   let num_of_modes = Enum.count (Map.keys modemap) in
@@ -437,7 +440,7 @@ let compile_logic_formula_pruned (h : Hybrid.t) (k : int) (heuristic : Costmap.t
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; step_clauses; [final_flow_clause];  [goal_clause]]) in
   Assert smt_formula
 
-let compile_logic_formula (h : Hybrid.t) (k : int) (path : int list option) =
+let compile_logic_formula (h : Hybrid.t) (k : int) (path : string list option) =
   let {init_id; init_formula; varmap; modemap; goals} = h in
   let init_clause = process_init ~init_id ~init_formula in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
@@ -457,7 +460,7 @@ let compile_logic_formula (h : Hybrid.t) (k : int) (path : int list option) =
   Assert smt_formula
 
 (** variable declaration & range constraint **)
-let compile_vardecl (h : Hybrid.t) (k : int) (path : (int list) option) =
+let compile_vardecl (h : Network.t) (k : int) (path : comppath option) =
   let {modemap} = h in
   let num_of_modes = Enum.count (Map.keys modemap) in
   let vardecls = varmap_to_list h.varmap in
@@ -542,6 +545,92 @@ let compile_vardecl (h : Hybrid.t) (k : int) (path : (int list) option) =
   let org_vardecl_cmds = List.map (fun (var, _) -> DeclareFun var) vardecls' in
   let assert_cmds = List.flatten assert_cmds_list in
   (org_vardecl_cmds@vardecl_cmds, assert_cmds)
+
+(*let compile_vardecl (h : Hybrid.t) (k : int) (path : (string list) option) =
+  let {modemap} = h in
+  let num_of_modes = Enum.count (Map.keys modemap) in
+  let vardecls = varmap_to_list h.varmap in
+  let (time_var_l, vardecls') = List.partition (fun (name, _) -> name = "time") vardecls in
+  ignore (global_vars := List.map (fun (k, v) -> k) vardecls');
+
+  (* generate time variable declaration *)
+  let time_intv =
+    match time_var_l with
+      | (_, intv)::[] -> intv
+      | _ -> raise (SMTException "time should be defined once and only once.")
+  in
+  let time_vardecls =
+    List.map
+      (fun n ->
+        ("time_" ^ (Int.to_string n), time_intv))
+      (List.of_enum (0 -- k))
+  in
+
+  (* generate variable declaration *)
+  let vardecls'' =
+    List.flatten
+      (List.flatten
+         (List.map
+            (function (var, v) ->
+              List.map
+                (fun k' ->
+                  [
+                    (var ^ "_" ^ (Int.to_string k') ^ "_0", v);
+                    (var ^ "_" ^ (Int.to_string k') ^ "_t", v)
+                  ]
+                )
+                (List.of_enum ( 0 -- k))
+            )
+            vardecls'
+         )
+      )
+  in
+
+  (* generate mode variable declaration *)
+  let mode_vardecls =
+    List.map
+      (fun n ->
+          ("mode_" ^ (Int.to_string n), Value.Intv (1.0, float_of_int num_of_modes))
+      )
+      (List.of_enum (0 -- k))
+  in
+  let new_vardecls = List.flatten [vardecls''; time_vardecls; mode_vardecls] in
+  let (vardecl_cmds, assert_cmds_list) =
+    List.split
+      (List.map
+         (function
+           | (name, Value.Intv (lb, ub)) ->
+              begin
+                match path with
+                  Some(my_path) ->
+                  begin
+                    match (String.starts_with name "time_",
+                           (String.sub name
+                              ((String.index name '_') + 1)
+                              (String.length name - ((String.index name '_') + 1)))) with
+                      (true, time_id) ->
+                      let time =  int_of_string time_id in
+                      let mode_id = List.at my_path time in
+                      let mode = Modemap.find mode_id h.modemap in
+                      let tprecision = mode.time_precision in
+                      (DeclareFun name,
+                       [make_lbp name lb tprecision;
+                        make_ubp name ub tprecision])
+                    |  _ ->
+                      (DeclareFun name,
+                       [make_lb name lb;
+                        make_ub name ub])
+                  end
+                | None ->
+                  (DeclareFun name,
+                   [make_lb name lb;
+                    make_ub name ub])
+              end
+           | _ -> raise (SMTException "We should only have interval here."))
+         new_vardecls) in
+  let org_vardecl_cmds = List.map (fun (var, _) -> DeclareFun var) vardecls' in
+  let assert_cmds = List.flatten assert_cmds_list in
+  (org_vardecl_cmds@vardecl_cmds, assert_cmds)*)
 
 (** variable declaration & range constraint **)
 let compile_vardecl_pruned (h : Hybrid.t) (k : int) (path : (int list) option) (relevant : Relevantvariables.t list option)  =
@@ -693,7 +782,7 @@ let compile_pruned (h : Hybrid.t) (k : int) (heuristic : Costmap.t)  (heuristic_
      [CheckSAT; Exit];
     ]
 
-let compile (h : Hybrid.t) (k : int) (path : (int list) option) =
+let compile (h : Network.t) (k : int) (path : comppath option) =
   let logic_cmd = SetLogic QF_NRA_ODE in
   let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
   let defineodes = compile_ode_definition h k in
@@ -708,8 +797,52 @@ let compile (h : Hybrid.t) (k : int) (path : (int list) option) =
     ]
 
 (** Enumerate all possible paths of length k in Hybrid Model h *)
-let pathgen (h : Hybrid.t) (k : int) : int list list =
-  let init_mode_id = h.init_id in
+let pathgen (h : Network.t) (k : int) : comppath list =
+  (*let init_mode_id = h.init_id in
+  let goal_mode_ids = List.map (fun (m, _) -> m ) h.goals in
+  let init_path = [init_mode_id] in*)
+  let init_mode_id = Network.init_mode_map h in
+  let goal_mode_ids = Network.goal_ids h in
+  let init_path = [Map.bindings init_mode_id] in
+  []
+  (* recursive function to generate reachable paths *)
+  (* NOTE: it generates path in reverse order! *)
+  (*let rec pathgen_aux h k paths =
+    if k = 0 then
+      paths
+    else
+      let newpaths = List.flatten (
+          List.map (fun path ->
+              match path with
+                last_mode_id::prefix ->
+                let last_mode = Map.find last_mode_id h.modemap in
+                let targets = List.of_enum (Map.keys last_mode.jumpmap) in
+                List.map (fun t -> t::last_mode_id::prefix) targets
+              | _ -> failwith "pathgen_aux gets empty path."
+            )
+            paths)
+      in
+      pathgen_aux h (k - 1) newpaths
+  in
+  let reversed_result = pathgen_aux h k [init_path] in
+  let result = List.map List.rev reversed_result in
+  let filtered_result =
+    (* Filter out an unfeasible path [m_0, m_1, ... m_k]:
+       - if [m_0] is not H.init_mode
+       - if [m_k] is not in h.goal_modes
+    *)
+    List.filter (fun l ->
+        let first = List.first l in
+        let last = List.last l in
+        first = init_mode_id && List.mem last goal_mode_ids
+      ) result in
+  filtered_result*)
+  
+(*let pathgen (h : Network.t) (k : int) : comppath list =
+  (*let init_mode_id = h.init_id in
+  let goal_mode_ids = List.map (fun (m, _) -> m ) h.goals in
+  let init_path = [init_mode_id] in*)
+  let init_mode_id = Network.init_mode_map h in
   let goal_mode_ids = List.map (fun (m, _) -> m ) h.goals in
   let init_path = [init_mode_id] in
   (* recursive function to generate reachable paths *)
@@ -744,3 +877,4 @@ let pathgen (h : Hybrid.t) (k : int) : int list list =
         first = init_mode_id && List.mem last goal_mode_ids
       ) result in
   filtered_result
+*)

@@ -25,4 +25,16 @@ module Mode = Mode
 
 module Modemap = Modemap
 
+(*module Labelmap = Labelmap*)
+
 module Hybrid = Hybrid
+
+(*module Label = Label*)
+
+module Replace = Replace
+
+module Replacemap = Replacemap
+
+module Replaceautmap = Replaceautmap
+
+module Network = Network

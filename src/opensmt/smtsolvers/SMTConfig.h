@@ -179,7 +179,7 @@ struct SMTConfig
   // SMT related parameters used by dReal
   string       nra_bmc_heuristic;             // Use BMC variable selection heuristic in Minisat from file
   string       nra_plan_heuristic;            // Use planning variable selection heuristic in Minisat from file
-  bool         nra_ODE_sim_heuristic;         //Use ODE simulation to guide ICP
+  bool         nra_ODE_sim_heuristic;         // Use ODE simulation to guide ICP
 
   // NRA-Solver related parameters (added for dReal2)
   bool         nra_delta_test;                // precision=(nra_delta_test ? delta : epsilon)

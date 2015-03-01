@@ -124,7 +124,7 @@ mode_id_str: MODE ID SEMICOLON { $2 }
 
 mode: LP mode_id_str SEMICOLON time_precision invts_op flows jumps RP
   {
-    Mode.make ($2, $4, $5, $6, Jumpmap.of_list $7)
+    Mode.make ($2, $4, $5, $6, $7, Jumpmap.of_list $7)
   }
 ;
 

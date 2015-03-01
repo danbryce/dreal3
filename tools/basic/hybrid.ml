@@ -89,7 +89,8 @@ let preprocess (vm, cm, mm, iid, iformula, gs, ginvs, n, ll) : t =
                (Basic.preprocess_formula subst (Jump.guard j),
 		Jump.precision j,
                 Jump.target j,
-                Basic.preprocess_formula subst (Jump.change j)))
+                Basic.preprocess_formula subst (Jump.change j),
+                Jump.label j))
             (Mode.jumps m),
           Map.map
             (fun j ->

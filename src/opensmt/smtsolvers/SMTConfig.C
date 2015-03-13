@@ -138,15 +138,12 @@ SMTConfig::initializeConfig( )
   nra_use_delta_heuristic      = false;
   nra_short_sat                = false;
   nra_bmc_heuristic            = "";
-<<<<<<< HEAD
   nra_aggressive               = 0;
   nra_sample                   = 0;
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
-=======
   nra_output_num_nodes         = false;
->>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
 }
 
 void SMTConfig::parseConfig ( char * f )
@@ -381,27 +378,18 @@ SMTConfig::parseCMDLine( int /* argc */
   nra_ODE_cache           = FLAGS_ode_cache;
   nra_ODE_forward_only    = FLAGS_ode_forward_only;
   nra_ODE_parallel        = FLAGS_ode_parallel;
-<<<<<<< HEAD
   nra_readable_proof      = FLAGS_readable_proof;
   nra_proof               = nra_readable_proof || FLAGS_proof;
-=======
-  nra_ODE_sim_heuristic   = FLAGS_ode_sim_heuristic;
-  nra_time_split_heuristic= FLAGS_time_split_heuristic;
-  nra_proof               = FLAGS_proof;
->>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
   nra_model               = FLAGS_model;
   nra_json                = FLAGS_visualize;
   nra_verbose             = FLAGS_verbose || FLAGS_debug;
   nra_debug               = FLAGS_debug;
-<<<<<<< HEAD
   nra_stat                = FLAGS_stat;
   nra_aggressive          = FLAGS_aggressive;
   nra_sample              = FLAGS_sample;
   nra_multiple_soln       = FLAGS_multiple_soln;
   nra_polytope            = FLAGS_polytope;
-=======
   nra_output_num_nodes    = FLAGS_output_num_nodes;
->>>>>>> 0e3548b... feat(heuristics): checkpoint on implementing ode simulation
 
   if (nra_proof) {
       /* Open file stream */

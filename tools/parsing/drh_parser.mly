@@ -18,8 +18,10 @@ let get_hybrid vardecl_list mode_list init goal ginv n label_list =
   let (init_mode, init_formula) = init in
   Hybrid.preprocess (vardeclmap, macromap, modemap, init_mode, init_formula, goal, ginv, n, label_list)
   
-let get_network hybrid_list labelmapping goals_list =
-  Network.postprocess_network (Network.make (hybrid_list, labelmapping, Vardeclmap.of_list [], goals_list))
+let get_network time_decl hybrid_list analyze goals_list = 
+	(* analyze :: [string, [(string, string)]]*)
+	let (instances, composition) = analyze in
+    Network.postprocess_network (Network.makep (time_decl, hybrid_list, Vardeclmap.of_list [], goals_list)) analyze
 %}
 
 %token COMPONENT LABEL ANALYZE DOT
@@ -45,14 +47,15 @@ let get_network hybrid_list labelmapping goals_list =
 %type <Type.Network.automaton> hybrid
 %type <Type.Network.automata> hybrid_list
 %type <Type.Hybrid.formula> formula
-%type <Type.Network.mapping> analyze
 
 %type <Type.Network.t> main
 
 %%
 
-main: hybrid_list analyze goal_aut { get_network $1 $2 $3 }
+main: time_decl hybrid_list analyze goal_aut { get_network $1 $2 $3 $4 }
 ;
+
+time_decl: varDecl { $1 }
 
 hybrid_list : { [] } 
           | hybrid hybrid_list { $1::$2 }
@@ -87,7 +90,10 @@ varDecl:
   | LB FFNUM COMMA FFNUM RB ID SEMICOLON { ($6, Value.Intv ($2, $4)) }
 ;
 
-analyze: ANALYZE COLON analyze_list SEMICOLON { $3 }
+/*analyze: ANALYZE COLON analyze_list SEMICOLON { $3 }
+;*/
+
+analyze: ANALYZE COLON hybrid_instance_list LP hybrid_instance_analyze_list RP SEMICOLON { ($3, $5) } 
 ;
 
 analyze_list: { [] }
@@ -104,6 +110,34 @@ substitution_list: { [] }
 ;
 
 substitution_id: ID SLASH ID { ($1, $3) }
+;
+
+hybrid_instance_analyze_list: { [] }
+							| PIPE PIPE hybrid_instance_analyze_list { $3 }
+							| ID hybrid_instance_analyze_list { ($1, [])::$2 }
+							| ID LB substitution_list RB hybrid_instance_analyze_list { ($1, $3)::$5 }  
+;
+
+hybrid_instance_list: { [] }
+					| hybrid_instance hybrid_instance_list { $1::$2 }
+;
+
+hybrid_instance: 
+	ID EQ ID 								/* 1, 2, 3 */
+	LB 										/* 4 */
+	hybrid_instance_substitution COMMA 		/* 5, 6 */
+	mode_formula				 			/* 7 */
+	RB SEMICOLON 							/* 8, 9 */
+	{ ($1, $3, $5, $7) }
+;
+
+hybrid_instance_init_assign: LB formula RB { $2 }
+;
+
+hybrid_instance_init_mode: AT ID { $2 }
+;
+
+hybrid_instance_substitution: LB substitution_list RB { $2 }
 ;
 
 mode_list: /* */ { [] }
@@ -237,7 +271,7 @@ jump_labels:
 	LP label_list_ids RP COLON { $2 }
 ;
 
-init: INIT COLON mode_formula { $3 }
+init: INIT COLON mode_formula SEMICOLON { $3 }
 ;
 
 goal: GOAL COLON mode_formula_list { $3 }
@@ -268,10 +302,10 @@ formula_list:
 ;
 
 mode_formula_list: { [] }
-  | mode_formula mode_formula_list { $1::$2 }
+  | mode_formula SEMICOLON mode_formula_list { $1::$3 }
 ;
 
-mode_formula: AT ID formula SEMICOLON { ($2, $3) }
+mode_formula: AT ID formula { ($2, $3) }
 ;
 
 /*goal_aut: GOAL COLON mode_formula_aut_list { $3 }

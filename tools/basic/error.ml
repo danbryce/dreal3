@@ -8,6 +8,7 @@ exception Domain_Mismatch of string
 exception Variable_Label_Match of string
 exception Variable_Label_Mapping of string
 exception Automaton_Not_Found of string
+exception Instance_Error of string * string
 
 let linenum = ref 1
 let incr_ln () = linenum := !linenum + 1
@@ -30,4 +31,6 @@ let handle_exn v =
 	  Printf.eprintf ">> variable and name share same identifier: %s\n" s
 	| Automaton_Not_Found s ->
 	  Printf.eprintf ">> automaton not found: %s\n" s
+	| Instance_Error (temp, inst) ->
+	  Printf.eprintf ">> unable to instanciate %s: %s not defined.\n" temp inst
     |  _ -> raise v

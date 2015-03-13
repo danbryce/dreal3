@@ -73,7 +73,9 @@ let run () =
     let hm = Drh_parser.main Drh_lexer.start lexbuf in
     begin
 		Network.print out hm;
-		()
+		(*let paths = Bmc.pathgen hm !k in*)
+		let smt = Bmc.compile hm !k None in
+		Smt2.print out smt
     end
     (*if !pathgen then (*TODO*)
       let paths = Bmc.pathgen hm !k in

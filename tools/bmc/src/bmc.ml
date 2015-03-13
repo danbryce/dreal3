@@ -22,7 +22,7 @@ type comppath = Network.comppath
 
 let global_vars = ref []
 
-(** rename variable to related name in each step **)
+(*(** rename variable to related name in each step **)
 let make_variable k suffix (s: string) : string =
   let str_step = string_of_int k in
   (String.join "_" [s; str_step;]) ^ suffix
@@ -783,7 +783,8 @@ let compile_pruned (h : Hybrid.t) (k : int) (heuristic : Costmap.t)  (heuristic_
     ]
 
 let compile (h : Network.t) (k : int) (path : comppath option) =
-  let logic_cmd = SetLogic QF_NRA_ODE in
+	List.flatten [[CheckSAT; Exit]]
+  (*let logic_cmd = SetLogic QF_NRA_ODE in
   let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
   let defineodes = compile_ode_definition h k in
   let assert_formula = compile_logic_formula h k path in
@@ -794,7 +795,7 @@ let compile (h : Network.t) (k : int) (path : comppath option) =
      assert_cmds;
      [assert_formula];
      [CheckSAT; Exit];
-    ]
+    ]*)
 
 (** Enumerate all possible paths of length k in Hybrid Model h *)
 let pathgen (h : Network.t) (k : int) : comppath list =
@@ -877,4 +878,129 @@ let pathgen (h : Network.t) (k : int) : comppath list =
         first = init_mode_id && List.mem last goal_mode_ids
       ) result in
   filtered_result
-*)
+*)*)
+
+let make_variable k suffix (s: string) : string =
+  let str_step = string_of_int k in
+  (String.join "_" [s; str_step;]) ^ suffix
+  
+let compile_vardecl (h : Network.t) (k : int) (path : comppath option) =
+  let modeNameToId = Modemapping.name_to_id (Network.modemapping h) in
+  let modeIdToName = Modemapping.id_to_name (Network.modemapping h) in
+  let num_of_nodes = Enum.count (Map.keys modeNameToId) in
+  let automatalist = List.map (fun x -> Hybrid.name x) (Network.automata h) in
+  let vardecls = Network.all_vars_unique (Network.automata h) in (*global vars, basically*)
+  let time_var_l = Network.time h in
+  let time_intv =
+    match time_var_l with
+      | (_, intv) -> intv
+      | _ -> raise (SMTException "time should be defined once and only once.")
+  in
+  let time_vardecls =
+    List.map
+      (fun n ->
+        ("time_" ^ (Int.to_string n), time_intv))
+      (List.of_enum (0 -- k))
+  in
+  let vardecls' = 
+	List.flatten
+      (List.flatten
+         (List.map
+            (function (var, v) ->
+              List.map
+                (fun k' ->
+                  [
+                    (var ^ "_" ^ (Int.to_string k') ^ "_0", v);
+                    (var ^ "_" ^ (Int.to_string k') ^ "_t", v)
+                  ]
+                )
+                (List.of_enum ( 0 -- k))
+            )
+            vardecls
+         )
+      )
+  in
+  let enforcement = List.map (fun x -> "enforce_" ^ x) automatalist in
+  let new_vardecls = List.flatten [vardecls'; time_vardecls] in
+  let (vardecl_cmds, assert_cmds_list) =
+    List.split
+      (List.map
+         (function
+           | (name, Value.Intv (lb, ub)) ->
+              begin
+                match path with
+                  Some (my_path) ->
+                  begin
+                    (*match (String.starts_with name "time_",
+                           (String.sub name
+                              ((String.index name '_') + 1)
+                              (String.length name - ((String.index name '_') + 1)))) with
+                      (true, time_id) ->
+                      let time =  int_of_string time_id in
+                      let mode_id = List.at my_path time in
+                      let mode = Modemap.find mode_id h.modemap in
+                      let tprecision = mode.time_precision in
+                      (DeclareFun name,
+                       [make_lbp name lb tprecision;
+                        make_ubp name ub tprecision])
+                    |  _ ->*)
+                      (DeclareFun name,
+                       [make_lb name lb;
+                        make_ub name ub])
+                  end
+                | None ->
+                  (DeclareFun name,
+                   [make_lb name lb;
+                    make_ub name ub])
+              end
+           | _ -> raise (SMTException "We should only have interval here."))
+         new_vardecls) in
+  let org_vardecl_cmds = List.map (fun (var, _) -> DeclareFun var) vardecls in
+  let assert_cmds = List.flatten assert_cmds_list in
+  (org_vardecl_cmds@vardecl_cmds, assert_cmds)
+  
+(*let make_mode_cond ~k ~q =
+  Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Num (float_of_int q))
+  
+let process_init ~init_id ~init_formula =
+  let mode_formula = make_mode_cond ~k:0 ~q:init_id in
+  let init_formula' =
+    Basic.subst_formula (make_variable 0 "_0") init_formula
+  in
+  Basic.And [init_formula'; mode_formula]
+  
+let compile_logic_formula (h : Network.t) (k : int) (path : comppath list option) =
+  let {init_id; init_formula; varmap; modemap; goals} = h in
+  let init_clause = process_init ~init_id ~init_formula in
+  (*let list_of_steps = List.of_enum (0 -- (k-1)) in
+  let step_clauses =
+    match path with
+      Some p -> List.map2 (fun q k -> process_step varmap modemap (Some q) k)
+                          (List.take k p)
+                          list_of_steps
+    | None -> List.map (process_step varmap modemap None) list_of_steps
+  in
+  (* tricky case, final mode need flow without jump  *)
+  let final_flow_clause = match path with
+      Some p -> final_flow varmap modemap (Some (List.last p)) k
+    | None -> final_flow varmap modemap None k in
+  let goal_clause = process_goals k goals in
+  let smt_formula = Basic.make_and (List.flatten [[init_clause]; step_clauses; [final_flow_clause];  [goal_clause]]) in*)
+  let smt_formula = Basic.make_and (List.flatten [[init_clause]] in
+  Assert smt_formula*)
+
+let compile (h : Network.t) (k : int) (path : comppath option) =
+  let logic_cmd = SetLogic QF_NRA_ODE in
+  let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
+  List.flatten [[logic_cmd];vardecl_cmds; assert_cmds; [CheckSAT; Exit]]
+  (*let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
+  let defineodes = compile_ode_definition h k in
+  let assert_formula = compile_logic_formula h k path in
+  List.flatten
+    [[logic_cmd];
+     vardecl_cmds;
+     defineodes;
+     assert_cmds;
+     [assert_formula];
+     [CheckSAT; Exit];
+    ]*)

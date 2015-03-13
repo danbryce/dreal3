@@ -40,6 +40,17 @@ let make (vm, mm, iid, iformula, gs, ginvs, n, ll)
    name = n;
    labels = ll}
    
+(*let makep (vm, mm, gs ginvs, n, ll) 
+  =
+  {varmap= vm;
+   modemap= mm;
+   init_id = "";
+   init_formula = False;
+   goals= gs;
+   ginvs = ginvs;
+   name = n;
+   labels = ll}*)
+   
 let vardeclmap {varmap = var; modemap = mo; init_id = iid; init_formula = ifo; goals = gs; ginvs = g; name = n; labels = ll } = var
 
 let labellist {varmap = var; modemap = mo; init_id = iid; init_formula = ifo; goals = gs; ginvs = g; name = n; labels = ll } = ll
@@ -124,6 +135,8 @@ let print out (hm : t) =
     Printf.fprintf out "\n====================%s====================\n" str
   in
   begin
+	(* print name *)
+	print_header out (name hm);
     (* print varDecl list *)
     print_header out "VarDecl Map";
     Vardeclmap.print out hm.varmap;

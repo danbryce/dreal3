@@ -1,3 +1,4 @@
+add_subdirectory(heuristics)
 add_subdirectory(api)
 add_subdirectory(cnfizers)
 add_subdirectory(common)

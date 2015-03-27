@@ -1,5 +1,6 @@
+[0, 5] time;
+
 (component train;
-	[0, 10000] time;
 	[0, 5000] x;
 
 	label approach, exit;
@@ -35,7 +36,6 @@
 )
 
 (component gate;
-	[0, 10000] time;
 	[0, 90] y;
 	
 	label raise, lower;
@@ -87,7 +87,6 @@
 )
 
 (component controller;
-	[0, 10000] time;
 	[0, 5] z;
 	
 	label lower, raise, approach, exit;
@@ -128,7 +127,9 @@
 )
 
 analyze:
-	train[x/x] || gate[y/y] || controller[z/z];
+	train1 = train[[x/x1], @far (x=90)];
+	train2 = train1[[x1/x2], @far (x1=90)];
+	(train[x/x] || gate[y/y] || controller[z/z]);
 	
 goal:
 	(@train.near): (and (x <= 1000) (x >= 0) (y >= 0));

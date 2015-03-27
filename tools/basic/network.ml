@@ -353,6 +353,7 @@ let postprocess_aut a m =
 			let flows = Mode.flows x in
 			let jumpmap = Mode.jumpmap x in
 			let jumps = Mode.jumps x in
+			let n_id = Mode.mode_numId x in
 			
 			let n_invs_op = match invs_op with
 				None -> None
@@ -396,7 +397,7 @@ let postprocess_aut a m =
 			)
 			jumps
 			in
-			Mode.make (mode_id, prec, n_invs_op, n_flows, n_jumps, n_jumpmap)
+			Mode.make (mode_id, n_id, prec, n_invs_op, n_flows, n_jumps, n_jumpmap)
 		end
 	)
 	modemap in
@@ -469,7 +470,7 @@ let postprocess_network n analyze =
 	process_variable_label_check_after_mapping auta_n;
 	let gl = get_vardeclmap_global auta_n in
 	let go = goals n in
-	let mm = Modemapping.process auta_n in
+	let mm = Modemapping.process_automata auta_n in
 	make (mm, t, auta_n, maps, gl, go)
 	
 let init_mode_map nw =

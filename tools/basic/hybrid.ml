@@ -82,11 +82,14 @@ let preprocess (vm, cm, mm, iid, iformula, gs, ginvs, n, ll) : t =
        end
     | false -> Basic.Var s
   in
+  let cnt: int ref = ref 0 in
   let mm' =
     Map.map
-      (fun m ->
+      (fun m -> begin
+      cnt := !cnt + 1;
        Mode.make
          (Mode.mode_id m,
+         !cnt,
           Mode.time_precision m,
           begin
             match (Mode.invs_op m) with
@@ -113,6 +116,7 @@ let preprocess (vm, cm, mm, iid, iformula, gs, ginvs, n, ll) : t =
                 Jump.label j))
             (Mode.jumpmap m)
          )
+         end
       )
       mm in
   let init_formula' = Basic.preprocess_formula subst iformula in

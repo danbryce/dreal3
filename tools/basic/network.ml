@@ -271,6 +271,9 @@ let rec all_label_names auta =
 		| Some x -> List.append (Hybrid.labellist x) (all_label_names (List.tl auta))
 		| None -> []
 		
+let all_label_names_unique auta =
+	List.sort_unique compare (all_label_names auta)
+		
 let process_variable_label_check_after_mapping auta = 
 	let vars = all_var_names auta in
 	let labels = all_label_names auta in

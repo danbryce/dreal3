@@ -944,7 +944,7 @@ let split_decls_assertions lst path =
            | _ -> raise (SMTException "We should only have interval here."))
          lst)
   
-let compile_vardecl (h : Network.t) (k : int) (path : comppath option) =
+let compile_vardecl (h : Network.t) (k : int) (path : comppath option) (precompute: bool) =
   let automatalist = List.map (fun x -> Hybrid.name x) (Network.automata h) in
   let vardecls = Network.all_vars_unique (Network.automata h) in (*global vars, basically*)
   let time_var_l = Network.time h in
@@ -988,6 +988,16 @@ let compile_vardecl (h : Network.t) (k : int) (path : comppath option) =
       (List.of_enum (0 -- k))
     )
   (Network.automata h)) in
+  let syncs = match precompute with
+    | false -> List.flatten (List.map (fun l -> 
+      List.map (fun i ->
+          (DeclareBool (mk_sync i l))
+        ) 
+        (List.of_enum (0 -- (k-1)))
+      )
+      (Network.all_label_names_unique (Network.automata h)))
+    | true -> []
+  in
   let gamma = List.flatten (List.flatten (List.map (
     fun x -> List.map (
       fun y -> List.map (
@@ -1006,54 +1016,11 @@ let compile_vardecl (h : Network.t) (k : int) (path : comppath option) =
   let assert_cmds = List.flatten assert_cmds_list in
   let assert_enf = List.flatten assert_enf_list in
   let assert_gam = List.flatten assert_gam_list in
-  (org_vardecl_cmds@vardecl_cmds@enfdecl_cmds@gamdecl_cmds, assert_cmds@assert_enf@assert_gam)
+  (org_vardecl_cmds@vardecl_cmds@syncs@enfdecl_cmds@gamdecl_cmds, assert_cmds@assert_enf@assert_gam)
   
 (*let make_mode_cond ~k ~q =
   Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Num (float_of_int q)) *)
   
-let mk_jmp_variable i var = 
-	match String.contains var '\'' with
-		true -> mk_variable (i+1) "_0" var
-		| false -> mk_variable i "_k" var
-  
-let mk_jump aut j i =
-	let (org, lab, des, jmp) = j in
-	let guard = Jump.guard jmp in
-	let change = Jump.change jmp in
-	let guard_mapped = Basic.subst_formula (mk_variable i "_k") guard in
-	let change_mapped = Basic.subst_formula (mk_jmp_variable i) change in
-	Basic.make_and [guard_mapped; change_mapped]
-  
-let trans_jump aut j i =
-	let (org, lab, des, jmp) = j in
-	let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
-	let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
-	let jmp = mk_jump aut j i in
-	let enforcement = Basic.make_and [enforce_org; enforce_des] in
-	Basic.make_and [jmp; enforcement]
-  
-let trans n aut i = 
-	let name = Hybrid.name aut in
-	let getMode mname = begin
-		let mapping = Network.modemapping n in
-		let name_to_obj = Modemapping.name_to_obj mapping in
-		Map.find (name, mname) name_to_obj
-	end in
-	let modes = Map.bindings (Hybrid.modemap aut) in
-	(*let jumps = *)List.flatten (List.map (fun (modename, modeobj) -> 
-		begin
-			let jm = Mode.jumps modeobj in
-			List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jm
-		end
-	) 
-	modes)
-	(*Basic.make_or (List.map (fun ml -> trans_jump aut ml i) jumps)*)
-	
-let cmp_elem el1 el2 =
-	match el1 = el2 with
-		| true -> Some el1
-		| false -> None
-		
 let rec lst_intersection' slst1 slst2 inter =
 	match
 		try Some (List.hd slst1, List.hd slst2)
@@ -1100,6 +1067,57 @@ let cmp_jump_records record1 record2 =
 	let (org2, lab2, des2, jmp2) = record2 in
 	let inter = lst_intersection lab1 lab2 in
 	inter
+  
+let mk_jmp_variable i var = 
+	match String.contains var '\'' with
+		true -> mk_variable (i+1) "_0" (String.filter (fun c -> not (c = '\'')) var)
+		| false -> mk_variable i "_t" var
+  
+let mk_jump aut j i =
+	let (org, lab, des, jmp) = j in
+	let guard = Jump.guard jmp in
+	let change = Jump.change jmp in
+	let guard_mapped = Basic.subst_formula (mk_variable i "_t") guard in
+	let change_mapped = Basic.subst_formula (mk_jmp_variable i) change in
+	Basic.make_and [guard_mapped; change_mapped]
+  
+let trans_jump aut j i =
+	let (org, lab, des, jmp) = j in
+	let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
+	let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
+	let jmp = mk_jump aut j i in
+	let enforcement = Basic.make_and [enforce_org; enforce_des] in
+	Basic.make_and [jmp; enforcement]
+	
+let trans_jump_sync aut j i = 
+	let (org, lab, des, jmp) = j in
+	let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
+	let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
+	let jmp = mk_jump aut j i in
+	let enforcement = Basic.make_and [enforce_org; enforce_des] in
+	let glab = Hybrid.labellist aut in
+	let inter = lst_intersection lab glab in
+	let ninter = List.filter (fun x -> not (List.mem x inter)) glab in
+	let syncs = Basic.make_and (List.map (fun v -> Basic.FVar (mk_sync i v)) inter) in
+	let nsyncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) ninter) in
+	Basic.make_and [syncs; nsyncs; jmp; enforcement]
+  
+let trans n aut i = 
+	let name = Hybrid.name aut in
+	let getMode mname = begin
+		let mapping = Network.modemapping n in
+		let name_to_obj = Modemapping.name_to_obj mapping in
+		Map.find (name, mname) name_to_obj
+	end in
+	let modes = Map.bindings (Hybrid.modemap aut) in
+	(*let jumps = *)List.flatten (List.map (fun (modename, modeobj) -> 
+		begin
+			let jm = Mode.jumps modeobj in
+			List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jm
+		end
+	) 
+	modes)
+	(*Basic.make_or (List.map (fun ml -> trans_jump aut ml i) jumps)*)
 	
 let global_label_set n = 
 	let auta = Network.automata n in
@@ -1253,10 +1271,10 @@ let rec get_jump_conjunctions jlist curjumplist =
 let get_unlabeled_jumps jmplist = 
 	let a = List.map (fun (aut, jlist) -> List.map (fun jmp -> (aut, jmp)) jlist) jmplist in
 	let b = List.flatten a in
-	let c = List.filter (fun (_, (_, lbl, _, _)) -> List.length lbl = 0) b in
+	let c = List.filter (fun (_, (_, lbl, _, _)) -> lbl = []) b in
 	c
 	
-let trans_network n i =
+let trans_network_precomposed n i =
 	let automata = Network.automata n in
 	let jumplst = List.map (fun a -> (a, trans n a i)) automata in
 	let jc = get_jump_conjunctions jumplst [] in
@@ -1268,14 +1286,40 @@ let trans_network n i =
 	let oc = Basic.make_or c in
 	let omuj = Basic.make_or muj in
 	Basic.make_or [oc; omuj]
+	
+let trans_network n i =
+	let automata = Network.automata n in
+	let jumplst = List.map (fun a -> (a, trans n a i)) automata in
+	let ax = List.map (fun (a, jlist) ->
+		Basic.make_or (List.map (fun j -> trans_jump_sync a j i) jlist)
+	) 
+	jumplst in
+	let bx = Basic.make_and ax in
+	bx
+	
+let mk_active_mode (aut: Hybrid.t) (m: Mode.t) (i: int) = 
+	let nId = Mode.mode_numId m in
+	let enf = mk_cnd (mk_enforce i aut) nId in
+	let nenf = Basic.Not enf in
+	let gam0 = mk_cnd (mk_gamma i aut m) 0 in
+	let gam1 = mk_cnd (mk_gamma i aut m) 1 in
+	Basic.make_and [(Basic.Imply (enf, gam1)); (Basic.Imply (gam1, enf)); (Basic.Imply (nenf, gam0)); (Basic.Imply (gam0, nenf))]
+	
+let mk_active (n: Network.t) (i: int) = 
+	let auta = Network.automata n in
+	let amodes = List.map (fun a -> (a, List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap a)))) auta in
+	Basic.make_and (List.map (fun (a, mlist) -> Basic.make_and (List.map (fun m -> mk_active_mode a m i) mlist)) amodes)
   
-let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) =
+let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (precompute: bool) =
   let init_clause = mk_init_network h in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
-  let discrete_steps = Basic.make_and (List.map (fun x -> trans_network h x) list_of_steps) in
+  let discrete_steps = match precompute with
+    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(trans_network_precomposed h x)]) list_of_steps)
+    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(trans_network h x)]) list_of_steps) in
   let goal_clause = mk_goal_network h k in
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; [discrete_steps]; [goal_clause]]) in
-  Assert smt_formula
+  (*Assert smt_formula*)
+  [(Assert init_clause); (Assert discrete_steps); (Assert goal_clause)]
   
 (*let compile_logic_formula (h : Network.t) (k : int) (path : comppath list option) =
   let {init_id; init_formula; varmap; modemap; goals} = h in
@@ -1297,11 +1341,11 @@ let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) =
   let smt_formula = Basic.make_and (List.flatten [[init_clause]] in
   Assert smt_formula*)
 
-let compile (h : Network.t) (k : int) (path : comppath option) =
+let compile (h : Network.t) (k : int) (path : comppath option) (precompute: bool) =
   let logic_cmd = SetLogic QF_NRA_ODE in
-  let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
-  let assert_formula = compile_logic_formula h k path in
-  List.flatten [[logic_cmd];vardecl_cmds; assert_cmds; [assert_formula]; [CheckSAT; Exit]]
+  let (vardecl_cmds, assert_cmds) = compile_vardecl h k path precompute in
+  let assert_formula = compile_logic_formula h k path precompute in
+  List.flatten [[logic_cmd];vardecl_cmds; assert_cmds; assert_formula; [CheckSAT; Exit]]
   (*let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
   let defineodes = compile_ode_definition h k in
   let assert_formula = compile_logic_formula h k path in

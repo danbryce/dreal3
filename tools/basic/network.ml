@@ -263,6 +263,8 @@ let rec all_vars auta =
 		
 let all_vars_unique auta  = List.sort_unique compare (all_vars auta)
 
+let all_varnames_unique auta = List.sort_unique compare (all_var_names auta)
+
 let rec all_label_names auta = 
 	match
 		try Some (List.hd auta)
@@ -338,7 +340,8 @@ let remap_labels_autname l m a_n =
 		false -> l
 		| true -> remap_labels l (Map.find a_n m)
 
-let postprocess_aut a m = 
+let postprocess_aut a m (mcnt: int ref) (acnt: int ref) = 
+	acnt := !acnt + 1;
 	let remapping = Replaceautmap.of_list m in
 	let name = Hybrid.name a in
 	let vardecls_t = Hybrid.vardeclmap a in
@@ -350,6 +353,7 @@ let postprocess_aut a m =
 	let modemap = Hybrid.modemap a in
 	let nmm = Map.map (
 		fun x -> begin
+			mcnt := !mcnt + 1;
 			let mode_id = Mode.mode_id x in
 			let prec = Mode.time_precision x in
 			let invs_op = Mode.invs_op x in
@@ -357,6 +361,7 @@ let postprocess_aut a m =
 			let jumpmap = Mode.jumpmap x in
 			let jumps = Mode.jumps x in
 			let n_id = Mode.mode_numId x in
+			(*let n_id = !mcnt in*)
 			
 			let n_invs_op = match invs_op with
 				None -> None
@@ -414,10 +419,12 @@ let postprocess_aut a m =
 			| false -> labels_t
 			| true -> map_replace_labels labels_t (Map.find name remapping)
 	in
-	Hybrid.make (vardecls, nmm, init_id, init_formula, goals, ginvs, name, labels)
+	Hybrid.make (vardecls, nmm, init_id, init_formula, goals, ginvs, name, !acnt, labels)
 
 let postprocess_automata a m = 
-	List.map (fun x -> postprocess_aut x m) a
+	let mcnt: int ref = ref 0 in
+	let acnt: int ref = ref 0 in
+	List.map (fun x -> postprocess_aut x m mcnt acnt) a
 	
 let check_time_variable t = 
 	let (var, value) = t in
@@ -448,6 +455,7 @@ let postprocess_network n analyze =
 								Hybrid.goals x,
 								Hybrid.ginvs x,
 								inst,
+								Hybrid.numid x,
 								Hybrid.labellist x
 							) in
 							nx::lst

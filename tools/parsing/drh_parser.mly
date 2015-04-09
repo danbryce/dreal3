@@ -16,7 +16,7 @@ let get_hybrid vardecl_list mode_list init goal ginv n label_list =
   let macromap = Vardeclmap.of_list float_list in
   let modemap = Modemap.of_list mode_list in
   let (init_mode, init_formula) = init in
-  Hybrid.preprocess (vardeclmap, macromap, modemap, init_mode, init_formula, goal, ginv, n, label_list)
+  Hybrid.preprocess (vardeclmap, macromap, modemap, init_mode, init_formula, goal, ginv, n, 0, label_list)
   
 let get_network time_decl hybrid_list analyze goals_list = 
 	(* analyze :: [string, [(string, string)]]*)

@@ -880,24 +880,152 @@ let pathgen (h : Network.t) (k : int) : comppath list =
   filtered_result
 *)*)
 
+(*let extract_flows q (modemap: Modemap.t) : flows_annot =
+	let m = Map.find q modemap in
+	(q, Mode.flows m)*)
+	
+(** build a list of odes **)
+(*let build_flow_annot_list (h : Hybrid.t) (step:int) =
+  let {varmap; modemap} = h in
+  let num_of_modes = Enum.count (Map.keys modemap) in
+  let list_of_modes = List.of_enum (1 -- num_of_modes ) in
+  List.map (function q -> extract_flows q modemap) list_of_modes*)
+
+(** build list of ode definition **)
+(*let compile_ode_definition (h : Hybrid.t) k =
+  let flows = build_flow_annot_list h k in
+  List.map (fun (g, odes) -> DefineODE ((make_variable g "" "flow"), odes)) flows*)
+
 let mk_variable k suffix (s: string) : string =
   let str_step = string_of_int k in
   (String.join "_" [s; str_step;]) ^ suffix
   
 let mk_enforce k aut = 
-	"enforce_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int k)
+	"mode_" ^ (string_of_int (Hybrid.numid aut)) ^ "_" ^ (string_of_int k)
 	
 let mk_cnd term c = 
 	Basic.Eq (Basic.Var (term), Basic.Num (float_of_int c))
 	
-let mk_enforce_s k aut =
-	"enforce_" ^ aut ^ "_" ^ (string_of_int k)
+(*let mk_enforce_s k aut =
+	"enforce_" ^ aut ^ "_" ^ (string_of_int k)*)
+	
+let mk_gamma_nt aut mode = 
+	"gamma_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int (Mode.mode_numId mode))
 	
 let mk_gamma k aut mode =
-	"gamma_" ^ (Hybrid.name aut) ^ "_" ^ (Mode.mode_id mode) ^ "_" ^ (string_of_int k)
+	(mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k)
 	
 let mk_sync k label = 
 	"sync_" ^ label ^ "_" ^ (string_of_int k)
+	
+let build_flow_annot_list_network (h: Network.t) = 
+	let auta = Network.automata h in
+	let b = List.map (fun a -> (a, List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap a)))) auta in
+	let d = List.map (fun (a, mlist)-> List.map (fun m -> (a, m, m.flows)) mlist) b in
+	List.flatten d
+	
+let mk_flow_var (a: Hybrid.t) (m: Mode.t) (k: int) = 
+	"flow_" ^ (string_of_int (Hybrid.numid a)) ^ "_" ^ (string_of_int (Mode.mode_numId m)) ^ "_" ^ (string_of_int k)
+	
+let mk_flow_mul_gamma (o: Ode.t list) k aut mode = 
+	List.map (fun (v, oexp) -> (v, Basic.Mul [oexp; Basic.Var (mk_gamma k aut mode)])) o
+
+let mk_flow_mul_gamma_nt (o: Ode.t) aut mode = 
+	let (v, oexp) = o in
+	Basic.Mul [oexp; Basic.Var (mk_gamma_nt aut mode)]
+	
+let mk_flow_mul_gamma_s (o: Ode.t) k aut mode = 
+	let (v, oexp) = o in
+	Basic.Mul [oexp; Basic.Var (mk_gamma k aut mode)]
+	
+let build_var_flow_list (n: Network.t) k =
+	let flows = build_flow_annot_list_network n in
+	let gvars = Network.all_varnames_unique (Network.automata n) in
+	let fflows = List.flatten (List.map (fun (a, m, odes) -> List.map (fun ode -> (a, m, ode)) odes) flows) in
+	let vflows = List.map (fun v -> (v, List.filter (fun (a, m, (vi, _)) -> v = vi) fflows)) gvars in
+	let non_empty_flows = List.filter (fun (_, vf) -> (List.length vf) > 0) vflows in
+	let mul_flows = List.map (fun (v, fl) -> (v, List.map (fun (a, m, ode) -> mk_flow_mul_gamma_s ode k a m) fl)) non_empty_flows in
+	let sum_flows = List.map (fun (v, fl) -> 
+		match (List.length fl) > 1 with
+			true -> (v, Basic.Add fl)
+			| false -> (v, List.hd fl)
+	) mul_flows in
+	sum_flows
+	
+let compile_ode_definition (n: Network.t) k = 
+	let flist = build_var_flow_list n in
+	let steps = List.of_enum (0 -- (k-1)) in
+	let flows = List.map (fun x -> DefineODE ("flow_"^(string_of_int x), build_var_flow_list n x)) steps in
+	flows
+	(*[DefineODE ("flow", flist)]*)
+	(*List.map (fun (a, m, odes) -> DefineODE (mk_flow_var a m k, odes)) flows*)
+	(*List.flatten (List.map (fun (a, m, odes) -> List.map (fun i -> DefineODE (mk_flow_var a m i, mk_flow_mul_gamma odes i a m)) steps) flows)*)
+	
+let get_ode_var_map (n: Network.t) (k: int) = 
+	let flowlist = build_flow_annot_list_network n in
+	let steps = List.of_enum (0 -- (k-1)) in
+	List.fold_left 
+	(
+		fun map (a, m, odes) -> 
+			List.fold_left 
+			(
+				fun mapi i -> 
+					Map.add (mk_flow_var a m i) (List.map (fun (v, _) -> v) odes) mapi
+			)
+			map
+			steps
+	)
+	Map.empty
+	flowlist
+	
+	(* (integral 0 time_1 [x_1_0 ... x_i_0] flow1) *)
+let mk_flow (n: Network.t) i = 
+	let fl = build_var_flow_list n i in
+	let fvar = "flow_"^(string_of_int i) in
+	let timevar = mk_variable i "" "time" in
+	let vvars = List.map (fun (v, _) -> v) fl in
+	let varBegin = List.map (fun v -> mk_variable i "_0" v) vvars in
+	let varEnd = List.map (fun v -> mk_variable i "_t" v) vvars in
+	let vecBegin = Basic.Vec varBegin in
+	let vecEnd = Basic.Vec varEnd in
+	Basic.Eq (vecEnd, Basic.Integral (0.0, timevar, varBegin, fvar))
+	(*let fvar = mk_flow_var aut mode i in
+	let gvar = mk_gamma i aut mode in
+	let vvars = Map.find fvar flowmap in
+	let timevar = mk_variable i "" "time" in
+	let varBegin = List.map (fun v -> mk_variable i "_0" v) vvars in
+	let varEnd = List.map (fun v -> mk_variable i "_t" v) vvars in
+	let vecBegin = Basic.Vec varBegin in
+	let vecEnd = Basic.Vec varEnd in
+	Basic.Eq (vecEnd, Basic.Integral (0.0, timevar, varBegin, fvar))*)
+	
+let mk_inv_q mode i = 
+	let invs = mode.invs_op in
+	match invs with
+		None -> Basic.True
+		| Some fl -> begin
+			let invs_mapped = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f) fl in
+			Basic.make_and invs_mapped
+			end
+			
+let mk_inv (n: Network.t) i = 
+	let auta = Network.automata n in
+	let enf_mode_inv = List.map (fun a -> begin
+		let modem = Map.bindings (Hybrid.modemap a) in
+		let modes = List.map (fun (_, m) -> m) modem in
+		List.map (fun m -> Basic.Imply (mk_cnd (mk_enforce i a) (Mode.mode_numId m), mk_inv_q m i)) modes
+	end) auta in
+	Basic.make_and (List.flatten enf_mode_inv)
+	
+let mk_maintain (n: Network.t) i = 
+	let flow = mk_flow n i in
+	let inv = mk_inv n i in
+	let time_var = mk_variable i "" "time" in
+	let forall_inv = Basic.ForallT (Basic.Num (float_of_int i),
+									Basic.Num 0.0,
+									Basic.Var time_var,
+									inv) in
+	Basic.make_and [flow; forall_inv]
 	
 let mk_init aut = 
 	let modeId = Hybrid.init_id aut in
@@ -915,11 +1043,13 @@ let mk_init_network n =
 let mk_goal_network n k = 
 	let (mode_list, form) = Network.goals n in
 	let form_mapped = Basic.subst_formula (mk_variable k "_t") form in
+	let auta = Network.automata n in
 	let enforcement = List.map (fun x ->
 		begin
 			let (aut, mode) = x in
+			let a_obj = List.find (fun a -> (Hybrid.name a) = aut) auta in
 			let autmode = Map.find x (Modemapping.name_to_obj (Network.modemapping n)) in
-			mk_cnd (mk_enforce_s k aut) (Mode.mode_numId autmode)
+			mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)
 		end
 	) 
 	mode_list in
@@ -1309,17 +1439,24 @@ let mk_active (n: Network.t) (i: int) =
 	let auta = Network.automata n in
 	let amodes = List.map (fun a -> (a, List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap a)))) auta in
 	Basic.make_and (List.map (fun (a, mlist) -> Basic.make_and (List.map (fun m -> mk_active_mode a m i) mlist)) amodes)
+	
+(*Integral of float * string * string list * string (* (integral 0 time_1 [x_1_0 ... x_i_0] flow1) *)*)
+
+(*let mk_flow *)
+
+(*let mk_inv_mode (aut: Hybrid.t) (m: Mode.t) (i: int) = 
+	*)
   
 let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (precompute: bool) =
   let init_clause = mk_init_network h in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
-  let discrete_steps = match precompute with
-    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(trans_network_precomposed h x)]) list_of_steps)
-    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(trans_network h x)]) list_of_steps) in
+  let steps = match precompute with
+    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network_precomposed h x)]) list_of_steps)
+    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network h x)]) list_of_steps) in
   let goal_clause = mk_goal_network h k in
-  let smt_formula = Basic.make_and (List.flatten [[init_clause]; [discrete_steps]; [goal_clause]]) in
+  let smt_formula = Basic.make_and (List.flatten [[init_clause]; [steps]; [goal_clause]]) in
   (*Assert smt_formula*)
-  [(Assert init_clause); (Assert discrete_steps); (Assert goal_clause)]
+  [(Assert init_clause); (Assert steps); (Assert goal_clause)]
   
 (*let compile_logic_formula (h : Network.t) (k : int) (path : comppath list option) =
   let {init_id; init_formula; varmap; modemap; goals} = h in
@@ -1344,8 +1481,9 @@ let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (pr
 let compile (h : Network.t) (k : int) (path : comppath option) (precompute: bool) =
   let logic_cmd = SetLogic QF_NRA_ODE in
   let (vardecl_cmds, assert_cmds) = compile_vardecl h k path precompute in
+  let odedef = compile_ode_definition h k in
   let assert_formula = compile_logic_formula h k path precompute in
-  List.flatten [[logic_cmd];vardecl_cmds; assert_cmds; assert_formula; [CheckSAT; Exit]]
+  List.flatten [[logic_cmd];vardecl_cmds; odedef; assert_cmds; assert_formula; [CheckSAT; Exit]]
   (*let (vardecl_cmds, assert_cmds) = compile_vardecl h k path in
   let defineodes = compile_ode_definition h k in
   let assert_formula = compile_logic_formula h k path in

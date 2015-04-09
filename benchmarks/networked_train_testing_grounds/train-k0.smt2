@@ -64,6 +64,7 @@
 (assert (<= gamma_controller_3_0 1))
 (assert (and (= mode_1_0 1) (= x_0_0 5000) (= mode_2_0 4) (= y_0_0 90) (= mode_3_0 3) (= z_0_0 0)))
 (assert true)
-(assert (and (= mode_1_0 2) (>= y_0_t 0) (>= x_0_t 0) (<= x_0_t 1000)))
+(assert (and (forall_t 0 [0 time_0] (and (=> (= mode_3_0 3) true) (=> (= mode_3_0 2) (<= z_0_t 5)) (=> (= mode_3_0 1) (<= z_0_t 5)) (=> (= mode_2_0 4) (<= y_0_t 90)) (=> (= mode_2_0 3) (>= y_0_t 90)) (=> (= mode_2_0 2) (>= y_0_t 0)) (=> (= mode_2_0 1) (= y_0_t 0)) (=> (= mode_1_0 3) (>= x_0_t -100)) (=> (= mode_1_0 2) (>= x_0_t 0)) (=> (= mode_1_0 1) (>= x_0_t 1000)))) (= [x_0_t y_0_t z_0_t] (integral 0. time_0 [x_0_0 y_0_0 z_0_0] flow_0))))
+(assert (and (>= y_0_t 0) (>= x_0_t 0) (<= x_0_t 1000)))
 (check-sat)
 (exit)

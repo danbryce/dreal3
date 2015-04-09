@@ -1454,9 +1454,10 @@ let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (pr
     | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network_precomposed h x)]) list_of_steps)
     | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network h x)]) list_of_steps) in
   let goal_clause = mk_goal_network h k in
+  let maintain_end = mk_maintain h k in
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; [steps]; [goal_clause]]) in
   (*Assert smt_formula*)
-  [(Assert init_clause); (Assert steps); (Assert goal_clause)]
+  [(Assert init_clause); (Assert steps); (Assert maintain_end); (Assert goal_clause)]
   
 (*let compile_logic_formula (h : Network.t) (k : int) (path : comppath list option) =
   let {init_id; init_formula; varmap; modemap; goals} = h in

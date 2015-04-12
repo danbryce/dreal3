@@ -1,0 +1,73 @@
+[0, 5] time;
+
+(component test;
+	label la;
+	
+	(mode one;
+		invt:
+		
+		flow:
+		
+		jump:
+			(): (true) ==> @two (true);
+	)
+	
+	(mode two;
+		invt:
+		
+		flow:
+		
+		jump:
+			(): (true) ==>  @three (true);
+	)
+	
+	(mode three;
+		invt:
+		
+		flow:
+		
+		jump:
+			(la): (true) ==> @three (true);
+	)
+	
+	init: @one (true);
+)
+
+(component test2;
+	label la;
+
+	(mode one2;
+		invt:
+		
+		flow:
+		
+		jump:
+			(la): (true) ==> @two2 (true);
+	)
+	
+	(mode two2;
+		invt:
+		
+		flow:
+		
+		jump:
+			(la): (true) ==>  @three2 (true);
+	)
+	
+	(mode three2;
+		invt:
+		
+		flow:
+		
+		jump:
+			(la): (true) ==> @three2 (true);
+	)
+	
+	init: @one2 (true);
+)
+
+analyze:
+	(test[] || test2[]);
+	
+goal:
+	(@test.three, @test2.three2): (true);

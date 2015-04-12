@@ -913,7 +913,10 @@ let mk_gamma_nt aut mode =
 	"gamma_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int (Mode.mode_numId mode))
 	
 let mk_gamma k aut mode =
-	(mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k)
+	(mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k) ^ "_0"
+	
+let mk_gamma_t k aut mode =
+	(mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k) ^ "_t"
 	
 let mk_sync k label = 
 	"sync_" ^ label ^ "_" ^ (string_of_int k)
@@ -938,28 +941,35 @@ let mk_flow_mul_gamma_s (o: Ode.t) k aut mode =
 	let (v, oexp) = o in
 	Basic.Mul [oexp; Basic.Var (mk_gamma k aut mode)]
 	
-let build_var_flow_list (n: Network.t) k =
+let build_var_flow_list (n: Network.t) =
 	let flows = build_flow_annot_list_network n in
 	let gvars = Network.all_varnames_unique (Network.automata n) in
 	let fflows = List.flatten (List.map (fun (a, m, odes) -> List.map (fun ode -> (a, m, ode)) odes) flows) in
 	let vflows = List.map (fun v -> (v, List.filter (fun (a, m, (vi, _)) -> v = vi) fflows)) gvars in
-	let non_empty_flows = List.filter (fun (_, vf) -> (List.length vf) > 0) vflows in
-	let mul_flows = List.map (fun (v, fl) -> (v, List.map (fun (a, m, ode) -> mk_flow_mul_gamma_s ode k a m) fl)) non_empty_flows in
+	let (non_empty_flows, empty_flows) = List.partition (fun (_, vf) -> (List.length vf) > 0) vflows in
+	let mul_flows = List.map (fun (v, fl) -> (v, List.map (fun (a, m, ode) -> mk_flow_mul_gamma_nt ode a m) fl)) non_empty_flows in
 	let sum_flows = List.map (fun (v, fl) -> 
 		match (List.length fl) > 1 with
 			true -> (v, Basic.Add fl)
 			| false -> (v, List.hd fl)
 	) mul_flows in
-	sum_flows
+	let gamma_plain = List.flatten (List.map (
+		fun x -> List.map (
+			fun y -> (mk_gamma_nt x y, Basic.Num (0.0))
+		)
+		(List.map (fun (a, b) -> b) (Map.bindings (Hybrid.modemap x)))
+	) (Network.automata n)) in
+	let const_change_flows = List.map (fun (v, _) -> (v, Basic.Num (0.0))) empty_flows in
+	sum_flows@gamma_plain@const_change_flows
 	
 let compile_ode_definition (n: Network.t) k = 
-	let flist = build_var_flow_list n in
-	let steps = List.of_enum (0 -- (k-1)) in
+	(*let steps = List.of_enum (0 -- k) in
 	let flows = List.map (fun x -> DefineODE ("flow_"^(string_of_int x), build_var_flow_list n x)) steps in
-	flows
+	flows*)
 	(*[DefineODE ("flow", flist)]*)
 	(*List.map (fun (a, m, odes) -> DefineODE (mk_flow_var a m k, odes)) flows*)
 	(*List.flatten (List.map (fun (a, m, odes) -> List.map (fun i -> DefineODE (mk_flow_var a m i, mk_flow_mul_gamma odes i a m)) steps) flows)*)
+	[(DefineODE ("flow_0", build_var_flow_list n))]
 	
 let get_ode_var_map (n: Network.t) (k: int) = 
 	let flowlist = build_flow_annot_list_network n in
@@ -980,12 +990,17 @@ let get_ode_var_map (n: Network.t) (k: int) =
 	
 	(* (integral 0 time_1 [x_1_0 ... x_i_0] flow1) *)
 let mk_flow (n: Network.t) i = 
-	let fl = build_var_flow_list n i in
-	let fvar = "flow_"^(string_of_int i) in
+	let fl = build_var_flow_list n in
+	(*let fvar = "flow_"^(string_of_int i) in*)
+	let fvar = "flow_0" in
 	let timevar = mk_variable i "" "time" in
 	let vvars = List.map (fun (v, _) -> v) fl in
 	let varBegin = List.map (fun v -> mk_variable i "_0" v) vvars in
-	let varEnd = List.map (fun v -> mk_variable i "_t" v) vvars in
+	let varEnd = List.map (fun v -> match String.starts_with v "gamma" with
+		false -> mk_variable i "_t" v
+		|true -> mk_variable i "_0" v 
+	) vvars in
+	(*let varEnd = List.map (fun v -> mk_variable i "_t" v) vvars in*)
 	let vecBegin = Basic.Vec varBegin in
 	let vecEnd = Basic.Vec varEnd in
 	Basic.Eq (vecEnd, Basic.Integral (0.0, timevar, varBegin, fvar))
@@ -1001,11 +1016,21 @@ let mk_flow (n: Network.t) i =
 	
 let mk_inv_q mode i = 
 	let invs = mode.invs_op in
+	let time_var = mk_variable i "" "time" in
 	match invs with
 		None -> Basic.True
 		| Some fl -> begin
 			let invs_mapped = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f) fl in
-			Basic.make_and invs_mapped
+			let invs_forall = List.map (fun f -> Basic.ForallT (Basic.Num (float_of_int i),
+												 Basic.Num 0.0,
+												 Basic.Var time_var,
+												 f)) invs_mapped in
+			let conj_invs = Basic.make_and invs_mapped in
+			Basic.ForallT (Basic.Num (float_of_int i),
+											Basic.Num 0.0,
+											Basic.Var time_var,
+											conj_invs)
+			(*conj_invs*)
 			end
 			
 let mk_inv (n: Network.t) i = 
@@ -1021,11 +1046,11 @@ let mk_maintain (n: Network.t) i =
 	let flow = mk_flow n i in
 	let inv = mk_inv n i in
 	let time_var = mk_variable i "" "time" in
-	let forall_inv = Basic.ForallT (Basic.Num (float_of_int i),
+	(*let forall_inv = Basic.ForallT (Basic.Num (float_of_int i),
 									Basic.Num 0.0,
 									Basic.Var time_var,
-									inv) in
-	Basic.make_and [flow; forall_inv]
+									inv) in*)
+	Basic.make_and [flow; inv]
 	
 let mk_init aut = 
 	let modeId = Hybrid.init_id aut in
@@ -1138,15 +1163,34 @@ let compile_vardecl (h : Network.t) (k : int) (path : comppath option) (precompu
     (List.map (fun (a, b) -> b) (Map.bindings (Hybrid.modemap x)))
   )
   (Network.automata h))) in
+  let gamma_t = List.flatten (List.flatten (List.map (
+    fun x -> List.map (
+      fun y -> List.map (
+        fun z -> (mk_gamma_t z x y, Value.Intv (0.0, 1.0))
+      )
+      (List.of_enum (0 -- k))
+    )
+    (List.map (fun (a, b) -> b) (Map.bindings (Hybrid.modemap x)))
+  )
+  (Network.automata h))) in
+  let gamma_plain = List.flatten (List.map (
+    fun x -> List.map (
+      fun y -> DeclareFun (mk_gamma_nt x y)
+    )
+    (List.map (fun (a, b) -> b) (Map.bindings (Hybrid.modemap x)))
+  )
+  (Network.automata h)) in
   let new_vardecls = List.flatten [vardecls'; time_vardecls] in
   let (vardecl_cmds, assert_cmds_list) = split_decls_assertions new_vardecls path in
   let (enfdecl_cmds, assert_enf_list) = split_decls_assertions enforcement path in
   let (gamdecl_cmds, assert_gam_list) = split_decls_assertions gamma path in
+  let (gamdecl_cmds_t, assert_gam_list_t) = split_decls_assertions gamma_t path in
   let org_vardecl_cmds = List.map (fun (var, _) -> DeclareFun var) vardecls in
   let assert_cmds = List.flatten assert_cmds_list in
   let assert_enf = List.flatten assert_enf_list in
   let assert_gam = List.flatten assert_gam_list in
-  (org_vardecl_cmds@vardecl_cmds@syncs@enfdecl_cmds@gamdecl_cmds, assert_cmds@assert_enf@assert_gam)
+  let assert_gam_t = List.flatten assert_gam_list_t in
+  (org_vardecl_cmds@vardecl_cmds@syncs@enfdecl_cmds@gamma_plain@gamdecl_cmds(*@gamdecl_cmds_t*), assert_cmds@assert_enf@assert_gam(*@assert_gam_t*))
   
 (*let make_mode_cond ~k ~q =
   Basic.Eq (Basic.Var ("mode_" ^ (string_of_int k)), Basic.Num (float_of_int q)) *)
@@ -1205,11 +1249,27 @@ let mk_jmp_variable i var =
   
 let mk_jump aut j i =
 	let (org, lab, des, jmp) = j in
+	let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
 	let guard = Jump.guard jmp in
 	let change = Jump.change jmp in
+	let used = Set.map
+		(fun v ->
+			match String.ends_with v "'" with
+			| true -> String.rchop v
+			| false -> v
+		)
+	(Basic.collect_vars_in_formula change) in
+	let change_unused =
+		Basic.make_and (List.map (fun name ->
+			match Set.mem name used with
+			| false -> Basic.Eq (Basic.Var (mk_variable i "_t" name), Basic.Var (mk_variable (i+1) "_0" name))
+			| true -> Basic.True
+		)
+		aut_vars
+    ) in
 	let guard_mapped = Basic.subst_formula (mk_variable i "_t") guard in
 	let change_mapped = Basic.subst_formula (mk_jmp_variable i) change in
-	Basic.make_and [guard_mapped; change_mapped]
+	Basic.make_and [guard_mapped; change_mapped; change_unused]
   
 let trans_jump aut j i =
 	let (org, lab, des, jmp) = j in
@@ -1231,6 +1291,11 @@ let trans_jump_sync aut j i =
 	let syncs = Basic.make_and (List.map (fun v -> Basic.FVar (mk_sync i v)) inter) in
 	let nsyncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) ninter) in
 	Basic.make_and [syncs; nsyncs; jmp; enforcement]
+	
+let mk_noop aut mode = 
+	let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
+	let change = Basic.make_and (List.map (fun v -> Basic.Eq (Basic.Var (v ^ "'"), Basic.Var v)) aut_vars) in
+	Jump.make (True, Mode.mode_id mode, change, [])
   
 let trans n aut i = 
 	let name = Hybrid.name aut in
@@ -1243,7 +1308,9 @@ let trans n aut i =
 	(*let jumps = *)List.flatten (List.map (fun (modename, modeobj) -> 
 		begin
 			let jm = Mode.jumps modeobj in
-			List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jm
+			(* Add noop transition *)
+			let jmn = (mk_noop aut modeobj)::jm in
+			List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jmn
 		end
 	) 
 	modes)
@@ -1451,13 +1518,13 @@ let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (pr
   let init_clause = mk_init_network h in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
   let steps = match precompute with
-    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network_precomposed h x)]) list_of_steps)
-    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_maintain h x);(mk_active h x);(trans_network h x)]) list_of_steps) in
+    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(mk_maintain h x);(trans_network_precomposed h x)]) list_of_steps)
+    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(mk_maintain h x);(trans_network h x)]) list_of_steps) in
   let goal_clause = mk_goal_network h k in
-  let maintain_end = mk_maintain h k in
+  let end_step = (*mk_maintain h k*) Basic.make_and [(mk_active h k); (mk_maintain h k)] in
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; [steps]; [goal_clause]]) in
   (*Assert smt_formula*)
-  [(Assert init_clause); (Assert steps); (Assert maintain_end); (Assert goal_clause)]
+  [(Assert init_clause); (Assert steps); (Assert end_step); (Assert goal_clause)]
   
 (*let compile_logic_formula (h : Network.t) (k : int) (path : comppath list option) =
   let {init_id; init_formula; varmap; modemap; goals} = h in

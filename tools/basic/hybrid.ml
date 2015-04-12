@@ -76,6 +76,7 @@ let numid {varmap = var; modemap = mo; init_id = iid; init_formula = ifo; goals 
       Only used in the parser.
       Substitute all the constant variables with their values.
  **)
+
 let preprocess (vm, cm, mm, iid, iformula, gs, ginvs, n, nid, ll) : t =
   let subst s =
     match Map.mem s cm with

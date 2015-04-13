@@ -29,6 +29,14 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "opensmt/egraph/Egraph.h"
 #include "opensmt/tsolvers/TSolver.h"
 #include "util/logging.h"
+#include "colin/RPGBuilder.h"
+#include "colin/val/TIM.h"
+#include "colin/FFSolver.h"
+#include "colin/colintotalordertransformer.h"
+#include "colin/globals.h"
+#include "colin/lpscheduler.h"
+#include "colin/numericanalysis.h"
+
 
 using std::string;
 using std::ifstream;
@@ -45,6 +53,7 @@ namespace dreal {
   void plan_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler* thandler, vec<Lit> *trl, vec<int> *trl_lim)  {
     DREAL_LOG_INFO << "plan_heuristic::initialize() " << (thandler == NULL);
     m_egraph = &egraph;
+    m_config = &c; 
     theory_handler = thandler;
     trail = trl;
     trail_lim = trl_lim;
@@ -104,12 +113,83 @@ namespace dreal {
         num_choices_per_happening = m_actions.size() + 3 * m_durative_actions.size();
         choices.assign(num_choices_per_happening*(m_depth+1), NULL);
 
-        DREAL_LOG_DEBUG << "num_choices_per_happening = " << num_choices_per_happening;
+	// vector<bool> *first_decision = new vector<bool>();
+	// first_decision->push_back(true);
+	// first_decision->push_back(false);
+	// m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
 
-        // vector<bool> *first_decision = new vector<bool>();
-        // first_decision->push_back(true);
-        // first_decision->push_back(false);
-        // m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
+  Planner::FF::steepestDescent = false;
+    Planner::FF::incrementalExpansion = false;
+    Planner::FF::invariantRPG = false;
+    Planner::FF::timeWAStar = false;
+    Planner::LPScheduler::hybridBFLP = false;
+    Planner::FF::useDominanceConstraintsInStateHash = true;
+    Planner::LPScheduler::hybridBFLP = true;
+
+    Planner::Globals::totalOrder = true;
+    Planner::RPGBuilder::modifiedRPG = false;
+    Planner::FF::tsChecking = true;
+    bool postHocScheduleToMetric = false;
+    Planner::LPScheduler::workOutFactLayerZeroBoundsStraightAfterRecentAction = true;
+
+
+     char* argv[] = { (char*)m_config->nra_plan_domain.c_str(),
+		     (char*)m_config->nra_plan_problem.c_str()};
+    //int argcount = 2;
+
+    DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() TIM Analysis";
+    TIM::performTIMAnalysis(&argv[0]);
+
+    Planner::MinimalState::setTransformer(new Planner::TotalOrderTransformer());
+
+    const bool realOpt =  Planner::Globals::optimiseSolutionQuality;
+     Planner::Globals::optimiseSolutionQuality = (Planner::Globals::optimiseSolutionQuality || postHocScheduleToMetric);
+   
+    DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() Initializing"; 
+    // Planner::Globals::writeableVerbosity = 16;
+    Planner::RPGBuilder::initialise();
+
+     Planner::Globals::optimiseSolutionQuality = realOpt;
+
+    {
+        list<Literal*>::iterator gsItr = Planner::RPGBuilder::getLiteralGoals().begin();
+        const list<Literal*>::iterator gsEnd = Planner::RPGBuilder::getLiteralGoals().end();
+
+        for (; gsItr != gsEnd; ++gsItr) {
+            pair<bool, bool> & currStatic = Planner::RPGBuilder::isStatic(*gsItr);
+            if (currStatic.first) {
+                if (!currStatic.second) {
+                    cout << "Static goal " << *(*gsItr) << " resolves to false: no plan can solve this problem\n";
+                    //reachedGoal = false;
+                    //return workingBestSolution;
+                }
+            } else {
+                goals.insert((*gsItr)->getStateID());
+            }
+
+        }
+
+    }
+    {
+      list<pair<int, int> >::iterator gsItr = Planner::RPGBuilder::getNumericRPGGoals().begin();
+        const list<pair<int, int> >::iterator gsEnd = Planner::RPGBuilder::getNumericRPGGoals().end();
+
+        for (; gsItr != gsEnd; ++gsItr) {
+            if (gsItr->first != -1) {
+                numericGoals.insert(gsItr->first);
+            }
+            if (gsItr->second != -1) {
+                numericGoals.insert(gsItr->second);
+            }
+        }
+    }
+
+
+    bool reachesGoals;
+    
+    Planner::FF::getMyHeuristic(reachesGoals);
+
+    DREAL_LOG_DEBUG << "plan_heuristic::initialize() done"; 
     }
 }
 
@@ -508,10 +588,10 @@ bool plan_heuristic::expand_path() {
           //       }
           //   }
         }
-        if(!found_existing_value) {
-          current_decision->push_back(false);
-          current_decision->push_back(true);
-
+	if(!found_existing_value){
+	  getColinHeuristic();
+	  current_decision->push_back(false);
+	  current_decision->push_back(true);
         }
 
         // // remove choices that are too costly for time
@@ -864,4 +944,66 @@ bool plan_heuristic::unwind_path() {
       //                   << endl;
       //  }
 }
+ 
+
+  Planner::ExtendedMinimalState* plan_heuristic::populateStateFromStack(vector<double>& tinitialFluents, Planner::LiteralSet& tinitialState){
+    DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() "; 
+    Planner::ExtendedMinimalState *my_state = new Planner::ExtendedMinimalState();
+
+    {
+      
+      
+
+       Planner::RPGBuilder::getNonStaticInitialState(tinitialState, tinitialFluents);
+      //DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() got init "; 
+       my_state->getEditableInnerState().setFacts(tinitialState);
+       my_state->getEditableInnerState().setFacts(tinitialFluents);
+       
+      for(auto l : tinitialState){
+      	l->write(cout); cout<< endl;
+      }
+      int p = 0;
+      for(auto l : tinitialFluents){
+      	PNE *my_pne = Planner::RPGBuilder::getPNE(p++);
+      	my_pne->write(cout); cout << " = " << l << endl;
+      }
+
+    }
+    DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() end"; 
+    return my_state;
+  }
+
+   
+
+  int plan_heuristic::getColinHeuristic(){
+    DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() "; 
+    
+     //bool reachesGoals; 
+     //Planner::FF::getMyHeuristic(reachesGoals);   
+    //SearchQueueItem * const initialSQI; 
+    vector<double> tinitialFluents; 
+    Planner::LiteralSet tinitialState;    
+    Planner::ExtendedMinimalState *state = populateStateFromStack(tinitialFluents,tinitialState);
+    auto_ptr<Planner::SearchQueueItem> node = auto_ptr<Planner::SearchQueueItem>(new Planner::SearchQueueItem(state, false));
+    Planner::ExtendedMinimalState * prevState = NULL;
+    Planner::ParentData *  incrementalData = NULL; 
+    const Planner::ActionSegment  actId; 
+    //list<Planner::FFEvent>  header; 
+    list<Planner::FFEvent> nowList;
+    int stepId = -1;
+ map<double, list<pair<int, int> > > * justApplied = 0;
+    // map<double, list<pair<int, int> > > actualJustApplied;
+    double tilFrom = 0.001;
+     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() Computing Heuristic";  
+     // Planner::FF::evaluateState(node, *state, prevState, goals, numericGoals, 
+     //  				incrementalData, node->helpfulActions, actId, node->plan)
+       Planner::FF::calculateHeuristic(*state, prevState, goals, numericGoals, 
+				       incrementalData, node->helpfulActions, node->plan,
+				       nowList, stepId,  false, justApplied, tilFrom);
+     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() Computed Heuristic"; 
+     delete state;      
+     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() end";
+     return 0;//node->heuristicValue.heuristicValue;   
+  }
+
 }

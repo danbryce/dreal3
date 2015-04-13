@@ -58,6 +58,7 @@ namespace dreal {
     int lastTrailEnd;
     int m_depth;
     Egraph * m_egraph;
+    SMTConfig *m_config;
     set<Enode*> stack_literals;
   };
 }

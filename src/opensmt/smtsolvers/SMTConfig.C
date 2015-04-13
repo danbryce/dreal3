@@ -35,6 +35,8 @@ DEFINE_string(plan_heuristic,      "", "plan heuristic");
 DEFINE_string(plan_domain,         "", "plan domain");
 DEFINE_string(plan_problem,        "", "plan problem");
 DEFINE_bool(output_num_nodes,   false, "ouput num nodes");
+DEFINE_string(plan_domain,         "", "plan domain");
+DEFINE_string(plan_problem,        "", "plan problem");
 DEFINE_bool  (short_sat,        false, "short sat");
 DEFINE_double(ode_step,           0.0, "ode step");
 DEFINE_uint64(ode_order,           20, "ode order");
@@ -138,11 +140,17 @@ SMTConfig::initializeConfig( )
   nra_use_delta_heuristic      = false;
   nra_short_sat                = false;
   nra_bmc_heuristic            = "";
+<<<<<<< HEAD
   nra_aggressive               = 0;
   nra_sample                   = 0;
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
+=======
+  nra_plan_heuristic           = "";
+  nra_plan_domain              = "";
+  nra_plan_problem             = "";
+>>>>>>> 3f7c91e... feat(heuristics): colin heuristic computation (for initial state)
   nra_output_num_nodes         = false;
 }
 
@@ -374,6 +382,8 @@ SMTConfig::parseCMDLine( int /* argc */
   nra_plan_domain         = FLAGS_plan_domain;
   nra_plan_problem        = FLAGS_plan_problem;
   nra_output_num_nodes    = FLAGS_output_num_nodes;
+  nra_plan_domain         = FLAGS_plan_domain;
+  nra_plan_problem        = FLAGS_plan_problem;
   nra_bmc_heuristic       = FLAGS_bmc_heuristic;
   nra_ODE_step            = FLAGS_ode_step;
   nra_ODE_taylor_order    = FLAGS_ode_order;

@@ -441,7 +441,7 @@ let postprocess_network n analyze =
 		fun lst (inst, temp, sub, init) ->
 			begin
 				match
-					try Some (List.find (fun a -> (Hybrid.name a) = temp) lst)
+					try Some (List.find (fun a -> (Hybrid.name a) = temp) auta)
 					with Not_found -> None
 				with
 					Some x -> 
@@ -467,13 +467,17 @@ let postprocess_network n analyze =
 						end
 			end
 	)
-	auta
+	[]
 	instances in
 	let t = time n in
 	check_time_variable t;
 	let instance_maps = List.map (fun (inst, temp, sub, init) -> (inst, sub)) instances in
-	let maps = List.append instance_maps composition in
-	let compositionlist = List.map (fun (x, y) -> x) composition in
+	let maps = instance_maps(*List.append instance_maps composition*) in
+	let compositionlist = (*List.map (fun (x, y) -> x)*) composition in
+	let aut_instance_names = List.map (fun x -> Hybrid.name x) aut_instanced in
+	ignore (List.map (fun x -> match List.mem x aut_instance_names with 
+		| true -> ()
+		| false -> raise (Error.Composition_Error x)) composition);
 	let aut_compose = List.filter (fun x -> List.mem (Hybrid.name x) compositionlist) aut_instanced in
 	process_variable_label_check_before_mapping aut_compose;
 	let auta_n = postprocess_automata aut_compose maps in

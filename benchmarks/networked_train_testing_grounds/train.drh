@@ -31,8 +31,6 @@
 		jump:
 			(exit): (x = -100) ==> @near (x' = 4900);
 	)
-	
-	init: @far (x = 5000);
 )
 
 (component gate;
@@ -81,9 +79,6 @@
 			(raise): (true) ==> @moveup (y' = y);
 			(lower): (true) ==> @movedown (y' = y);
 	)
-	
-	init:
-		@open (y = 90);
 )
 
 (component controller;
@@ -121,15 +116,13 @@
 			(exit): (true) ==> @dodown (z' = z);
 			(lower): (true) ==> @idle (z' = z);
 	)
-	
-	init:
-		@idle (z = 0);
 )
 
 analyze:
-	train1 = train[[x/x1], @far (x=90)];
-	train2 = train1[[x1/x2], @far (x1=90)];
-	(train[x/x] || gate[y/y] || controller[z/z]);
+	train0 = train[[], @far (x=5000)];
+	gate0 = gate[[], @open (y = 90)];
+	controller0 = controller[[], @idle (z = 0)];
+	(train0 || gate0 || controller0);
 	
 goal:
 	(): (and (x <= 1000) (x >= 0) (y >= 0));

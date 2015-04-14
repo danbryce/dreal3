@@ -61,7 +61,7 @@ hybrid_list : { [] }
           | hybrid hybrid_list { $1::$2 }
 ;
 
-hybrid: LP COMPONENT ID SEMICOLON varDecl_list label_list mode_list init /*goal ind*/ RP { get_hybrid $5 $7 $8 [] [] (*$9 $10*) $3 $6 }
+hybrid: LP COMPONENT ID SEMICOLON varDecl_list label_list mode_list /*init goal ind*/ RP { get_hybrid $5 $7 ("", Basic.True)(*$8*) [] [] (*$9 $10*) $3 $6 }
 /* | varDecl_list mode_list init goal { main_routine $4 $6 $7 $8 [] $3 $5 } */
 ;
 
@@ -93,7 +93,7 @@ varDecl:
 /*analyze: ANALYZE COLON analyze_list SEMICOLON { $3 }
 ;*/
 
-analyze: ANALYZE COLON hybrid_instance_list LP hybrid_instance_analyze_list RP SEMICOLON { ($3, $5) } 
+analyze: ANALYZE COLON hybrid_instance_list LP hybrid_analyze_composition RP SEMICOLON { ($3, $5) } 
 ;
 
 analyze_list: { [] }
@@ -117,6 +117,10 @@ hybrid_instance_analyze_list: { [] }
 							| ID hybrid_instance_analyze_list { ($1, [])::$2 }
 							| ID LB substitution_list RB hybrid_instance_analyze_list { ($1, $3)::$5 }  
 ;
+
+hybrid_analyze_composition: { [] }
+							| PIPE PIPE  hybrid_analyze_composition { $3 }
+							| ID hybrid_analyze_composition { $1::$2 }
 
 hybrid_instance_list: { [] }
 					| hybrid_instance hybrid_instance_list { $1::$2 }

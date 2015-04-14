@@ -21,8 +21,6 @@
 		flow:
 		jump:
 	)
-	
-	init: @running (and (ran = 0) (fuellevel = 980) (duration = 1000));
 )
 
 (component refuel;
@@ -44,12 +42,12 @@
 		flow:
 		jump:
 	)
-
-	init: @running (duration = 10);
 )
 
 analyze:
-	(generate[duration/dur1] || refuel[duration/dur2]);
+	gen0 = generate[[duration/dur1], @running (and (ran = 0) (fuellevel = 970) (duration = 1000))];
+	ref0 = refuel[[duration/dur2], @running (duration = 10)];
+	(gen0 || ref0);
 
 goal:
 	(): (ran = 1);

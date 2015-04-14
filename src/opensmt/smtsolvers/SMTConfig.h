@@ -215,9 +215,6 @@ struct SMTConfig
   unsigned     nra_found_soln;                // number of solutions found so far
   bool         nra_polytope;                  // use polytope contractor in IBEX
   int          nra_output_num_nodes;          // output number of SAT and ICP nodes
-  string       nra_plan_heuristic;            // use the plan heuristic from file
-  string       nra_plan_domain;               // planning domain
-  string       nra_plan_problem;              // planning instance
   int          nra_icp_decisions;             // number of icp branch nodes
 
   void inc_icp_decisions() { nra_icp_decisions++; }

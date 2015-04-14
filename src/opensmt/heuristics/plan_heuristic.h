@@ -63,7 +63,7 @@ private:
     
 
     Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluents,Planner::LiteralSet& tinitialState);  
-    int getColinHeuristic();
+    int getColinHeuristic(int choice);
     
 
     // search related data and methods

@@ -457,8 +457,8 @@ void plan_heuristic::inform(Enode * e) {
     displayStack();
   }
 
-  void plan_heuristic::completeSuggestionsForTrail() {
-    for(unsigned int i = 0; i < m_decision_stack.size(); i++) {
+  void plan_heuristic::completeSuggestionsForTrail(){
+    for(int i = m_decision_stack.size()-1; i < m_decision_stack.size(); i++){
       pair<Enode*, vector<bool>*>* decision = m_decision_stack[i];
       if(decision->first != NULL) {
         m_suggestions.push_back(new std::pair<Enode *, bool>(decision->first, decision->second->back()));
@@ -526,105 +526,74 @@ bool plan_heuristic::expand_path() {
       return false;
 
     first_path = false;
+    bool found_step = false;
+    int steps_to_add = min(1, (num_choices_per_happening*m_depth)-
+			   static_cast<int>(m_decision_stack.size()));
 
-    int steps_to_add = (num_choices_per_happening*m_depth)-
-      static_cast<int>(m_decision_stack.size());
+    bool no_steps_left = false;
+
     DREAL_LOG_INFO << "Adding #steps: " << steps_to_add << endl;
-    for (int i = 0; i < steps_to_add; i++) {
-      int time = m_depth - ((static_cast<int>(m_decision_stack.size()))/
-                            num_choices_per_happening);
+    for (int i = 0; i < steps_to_add; ){
+      int time =  ((static_cast<int>(m_decision_stack.size()))/
+			    num_choices_per_happening)+1;
       int choice = (static_cast<int>(m_decision_stack.size()))%num_choices_per_happening;
 
+      if(time > m_depth){
+	return false;
+      }
+
+      DREAL_LOG_DEBUG << "time = " << time << " choice = " << choice;
+
+      no_steps_left = (time == m_depth && choice == num_choices_per_happening-1);
+      if(no_steps_left)
+	break;
+
       vector<bool> * current_decision = new vector<bool>();
-
-      //      int parent_index = (static_cast<int>(m_decision_stack.size()))-num_autom;
-
-      // if (parent_index < 0) {
-      //        DREAL_LOG_INFO << "Adding goal at time " << time << " for a" << autom;
-      //        pair<int, vector<int>*>* astack = new pair<int, vector<int>*>();
-      //        m_decision_stack.push_back(astack);
-
-      //        vector<int> *dec = new vector<int>();
-      //        dec->insert(dec->begin(), m_goal_modes[autom]->begin(), m_goal_modes[autom]->end());
-      //        sort (dec->begin(), dec->end(), SubgoalCompare(autom, *this));
-      //        astack->first = autom;
-      //        astack->second = dec;
-
-      // } else {
-      //	int parent = m_decision_stack[parent_index]->second->back();
-
-
-      // set<int> * preds = (*predecessors[autom])[parent-1];
-      // current_decision->insert(current_decision->begin(), preds->begin(), preds->end());
 
       Enode* current_enode = choices[num_choices_per_happening*time+choice];
       bool found_existing_value = false;
 
-      if (current_enode != NULL) { //already has a preprocessed value
-        DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
-      }
+      if (current_enode != NULL) { 
+	DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
+      
 
-      vector<bool> current_decision_copy (current_decision->begin(), current_decision->end());
+	//      vector<bool> current_decision_copy (current_decision->begin(), current_decision->end());
         // prune out choices that are negated in m_stack
-        for (auto e : m_stack) {
-          if(e->first == current_enode) {
-            current_decision->push_back(e->second);
-            found_existing_value = true;
-            break;
-          }
-
-          // if (e->second != true) {
-          //       //      DREAL_LOG_INFO << "Checking removal of " << e << endl;
-          //     auto p = (*mode_literals[autom]).find(e->first);
-          //     if (p != (*mode_literals[autom]).end()) {
-          //           // DREAL_LOG_INFO << "Removing negated " << p->second->first << endl;
-          //           if (p->second->second == time) {
-          //               DREAL_LOG_INFO << "Removing negated " << p->second->first << endl;
-          //               auto e1 = current_decision_copy.find(p->second->first);
-          //               if (e1 != current_decision_copy.end()) {
-          //                   current_decision_copy.erase(e1);
-          //               }
-          //           }
-          //       }
-          //   }
-        }
-	if(!found_existing_value){
-	  getColinHeuristic();
+      for (auto e : m_stack) {
+	if(e->first == current_enode){
+	  current_decision->push_back(e->second);
+	  found_existing_value = true;
+	  break;
+	}	
+      }
+      if(!found_existing_value){
+	double before_decision_value = getColinHeuristic(-1); //value if do nothing
+	double after_decision_value = getColinHeuristic(choice); //value if do choice
+	if(before_decision_value <= after_decision_value){
+	  // adding this action does not improve heuristic value
 	  current_decision->push_back(false);
 	  current_decision->push_back(true);
-        }
+	} else {
+	  // adding this action does improve heuristic value
+	  current_decision->push_back(true);
+	  current_decision->push_back(false);
+	}
+	i++; //added a step
+	found_step = true;
+      }
 
-        // // remove choices that are too costly for time
-        // for (auto c : *current_decision)  {
-        //   if ((*m_cost[autom])[ c-1 ] > time)  {
-        //         DREAL_LOG_INFO << "Removing too costly " << c << endl;
-        //         auto e = current_decision_copy.find(c);
-        //         if (e != current_decision_copy.end()) {
-        //             current_decision_copy.erase(e);
-        //         }
-        //     }
-        // }
+      if (current_decision->size() == 0){
+	DREAL_LOG_INFO << "No decisions left at time " << time << endl;
+	return false;
+      }
+      }
+      m_decision_stack.push_back(new pair<Enode*, vector<bool>*>(current_enode, current_decision));
 
-        // current_decision->clear();
-        // current_decision->insert(current_decision->begin(), current_decision_copy.begin(), current_decision_copy.end());
-
-        if (current_decision->size() == 0) {
-            DREAL_LOG_INFO << "No decisions left at time " << time << endl;
-            return false;
-        }
-
-        //    sort (current_decision->begin(), current_decision->end(), SubgoalCompare(autom, *this));
-
-        m_decision_stack.push_back(new pair<Enode*, vector<bool>*>(current_enode, current_decision));
-
-        // for (auto d : *current_decision) {
-        //     DREAL_LOG_INFO << "dec = " << d << endl;
-        // }
-        // }
     }
 
-    return static_cast<int>(m_decision_stack.size()) ==
-      num_choices_per_happening*(m_depth); // successfully found a full path
+    return found_step || no_steps_left;
+      // static_cast<int>(m_decision_stack.size()) ==
+      // num_choices_per_happening*(m_depth); // successfully found a full path
 }
 
   // undo choices on m_decision_stack until earliest violated decision
@@ -954,7 +923,7 @@ bool plan_heuristic::unwind_path() {
       
       
 
-       Planner::RPGBuilder::getNonStaticInitialState(tinitialState, tinitialFluents);
+      Planner::RPGBuilder::getNonStaticInitialState(tinitialState, tinitialFluents);
       //DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() got init "; 
        my_state->getEditableInnerState().setFacts(tinitialState);
        my_state->getEditableInnerState().setFacts(tinitialFluents);
@@ -975,35 +944,37 @@ bool plan_heuristic::unwind_path() {
 
    
 
-  int plan_heuristic::getColinHeuristic(){
+  int plan_heuristic::getColinHeuristic(int choice){
     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() "; 
     
-     //bool reachesGoals; 
-     //Planner::FF::getMyHeuristic(reachesGoals);   
+    //bool reachesGoals; 
+    //Planner::FF::getMyHeuristic(reachesGoals);   
     //SearchQueueItem * const initialSQI; 
-    vector<double> tinitialFluents; 
-    Planner::LiteralSet tinitialState;    
-    Planner::ExtendedMinimalState *state = populateStateFromStack(tinitialFluents,tinitialState);
+    vector<double> reals; 
+    Planner::LiteralSet booleans;    
+    Planner::ExtendedMinimalState *state = populateStateFromStack(reals,booleans);
     auto_ptr<Planner::SearchQueueItem> node = auto_ptr<Planner::SearchQueueItem>(new Planner::SearchQueueItem(state, false));
     Planner::ExtendedMinimalState * prevState = NULL;
     Planner::ParentData *  incrementalData = NULL; 
     const Planner::ActionSegment  actId; 
-    //list<Planner::FFEvent>  header; 
     list<Planner::FFEvent> nowList;
     int stepId = -1;
- map<double, list<pair<int, int> > > * justApplied = 0;
-    // map<double, list<pair<int, int> > > actualJustApplied;
+    map<double, list<pair<int, int> > > * justApplied = 0;
     double tilFrom = 0.001;
      DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() Computing Heuristic";  
      // Planner::FF::evaluateState(node, *state, prevState, goals, numericGoals, 
      //  				incrementalData, node->helpfulActions, actId, node->plan)
+
+     Planner::FF::HTrio hvalue = 
        Planner::FF::calculateHeuristic(*state, prevState, goals, numericGoals, 
 				       incrementalData, node->helpfulActions, node->plan,
 				       nowList, stepId,  false, justApplied, tilFrom);
-     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() Computed Heuristic"; 
+
+     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() value = " 
+		     << hvalue.heuristicValue << " makespan = " << hvalue.makespanEstimate; 
      delete state;      
-     DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() end";
-     return 0;//node->heuristicValue.heuristicValue;   
+     // DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() end";
+     return hvalue.heuristicValue;   
   }
 
 }

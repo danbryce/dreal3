@@ -1,4 +1,4 @@
-[0, 5] time;
+[0, 100000] time;
 
 (component train;
 	[0, 5000] x;
@@ -11,7 +11,7 @@
 		flow:
 			d/dt[x] = -1;
 		jump:
-			(approach): (true) ==> @near (x' = 1000);
+			(approach): (x = 1000) ==> @near true;
 	)
 
 	(mode near;
@@ -82,7 +82,7 @@
 )
 
 (component controller;
-	[0, 5] z;
+	[0, 100000] z;
 	
 	label lower, raise, approach, exit;
 	
@@ -125,4 +125,5 @@ analyze:
 	(train0 || gate0 || controller0);
 	
 goal:
-	(): (and (x <= 1000) (x >= 0) (y >= 0));
+//	(): (and (x <= 1000) (x >= 0) (y >= 0));
+	(@gate.closed): true;

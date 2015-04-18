@@ -18,17 +18,29 @@ let main_routine vardecl_list mode_list init goal ginv =
   let (init_mode, init_formula) = init in
   Hybrid.preprocess (vardeclmap, macromap, modemap, init_mode, init_formula, goal, ginv, "singleton", 0, [])
   
+let remove_time (singleton: Hybrid.t) = 
+  let vm = Map.remove "time" (Hybrid.vardeclmap singleton) in
+  let mm = Hybrid.modemap singleton in
+  let init_id = Hybrid.init_id singleton in
+  let init_formula = Hybrid.init_formula singleton in
+  let goals = Hybrid.goals singleton in
+  let ginvs = Hybrid.ginvs singleton in
+  let name = Hybrid.name singleton in
+  let num_id = Hybrid.numid singleton in
+  let labellist = Hybrid.labellist singleton in
+  Hybrid.make (vm, mm, init_id, init_formula, goals, ginvs, name, num_id, labellist)
+  
 let get_network (singleton: Hybrid.t) = 
   (* analyze :: [string, [(string, string)]]*)
   let base = "singleton" in
   let inst = "singleton0" in
   let subs = [] in
   let init = (Hybrid.init_id singleton, Hybrid.init_formula singleton) in
-  let anal = ([(base, inst, subs, init)], ["singleton0"]) in
+  let anal = ([(inst, base, subs, init)], ["singleton0"]) in
   let vars = Hybrid.vardeclmap singleton in
   let time = ("time", Map.find "time" vars) in
   let (mid, mfo) = List.hd (Hybrid.goals singleton) in (* [(modeid, formula)] *)
-  Network.postprocess_network (Network.makep (time, [singleton], Vardeclmap.of_list [], ([(base, mid)], mfo))) anal
+  Network.postprocess_network (Network.makep (time, [remove_time singleton], Vardeclmap.of_list [], ([(inst, mid)], mfo))) anal
 %}
 
 %token LB RB LC RC LP RP EQ PLUS MINUS AST SLASH COMMA COLON SEMICOLON

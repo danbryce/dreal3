@@ -43,6 +43,9 @@ OPTIONS:
                                 51 if SAT, 
                                 52 if UNSAT,
                                 1 abnormal termination
+
+   -o               parse old .drh file format (default: do not use)
+
 EXAMPLE:
 
    dReach -k 10      bouncing_ball.drh --verbose --precision=0.001 --visualize
@@ -59,8 +62,9 @@ L=0
 U=NONE
 DEFAULT_U=3
 Z_OPT=FALSE #(edited: FS)
+OLD=""
 
-while getopts "zhbdk:l:u:ep:ir" OPTION
+while getopts "zohbdk:l:u:ep:ir" OPTION
 do
     case $OPTION in
         h)
@@ -91,6 +95,9 @@ do
         z)                  #(edited: FS)
             Z_OPT=TRUE      #
             ;;              #
+        o)
+            OLD=" --old_format"
+            ;;
         \?)
             usage
             exit 1
@@ -160,6 +167,9 @@ echo dReal Options: $SOLVER_OPT
 
 # Preprocessing
 sed "s/\/\/.*//g" $DRH | cpp -P -w > $PDRH
+
+# Append option to parse old file format
+BMC=$BMC$OLD
 
 UNROLLS=`seq $L $U`
 for K in $UNROLLS

@@ -61,8 +61,7 @@ hybrid_list : { [] }
           | hybrid hybrid_list { $1::$2 }
 ;
 
-hybrid: LP COMPONENT ID SEMICOLON varDecl_list label_list mode_list /*init goal ind*/ RP { get_hybrid $5 $7 ("", Basic.True)(*$8*) [] [] (*$9 $10*) $3 $6 }
-/* | varDecl_list mode_list init goal { main_routine $4 $6 $7 $8 [] $3 $5 } */
+hybrid: LP COMPONENT ID SEMICOLON varDecl_list label_list mode_list RP { get_hybrid $5 $7 ("", Basic.True) [] [] $3 $6 }
 ;
 
 label_list: { [] } 
@@ -89,9 +88,6 @@ varDecl:
     LB FFNUM RB ID SEMICOLON { ($4, Value.Num $2) }
   | LB FFNUM COMMA FFNUM RB ID SEMICOLON { ($6, Value.Intv ($2, $4)) }
 ;
-
-/*analyze: ANALYZE COLON analyze_list SEMICOLON { $3 }
-;*/
 
 analyze: ANALYZE COLON hybrid_instance_list LP hybrid_analyze_composition RP SEMICOLON { ($3, $5) } 
 ;
@@ -135,12 +131,6 @@ hybrid_instance:
 	{ ($1, $3, $5, $7) }
 ;
 
-hybrid_instance_init_assign: LB formula RB { $2 }
-;
-
-hybrid_instance_init_mode: AT ID { $2 }
-;
-
 hybrid_instance_substitution: LB substitution_list RB { $2 }
 ;
 
@@ -148,25 +138,10 @@ mode_list: /* */ { [] }
   | mode mode_list { $1::$2 }
 ;
 
-/*mode: LP mode_id_str time_precision invts_op flows jumps RC
-  {
-    Mode.make ($2, $3, $4, $5, $6, Jumpmap.of_list $6)
-  }
-;
-
-mode_id: MODE FNUM SEMICOLON { int_of_float $2 }
-;
-
-mode_id_str: MODE ID SEMICOLON { $2 }
-; */
-
 mode: LP mode_id_str SEMICOLON time_precision invts_op flows jumps RP
   {
     Mode.make ($2, 0, $4, $5, $6, $7, Jumpmap.of_list $7)
   }
-;
-
-mode_id: MODE FNUM SEMICOLON { int_of_float $2 }
 ;
 
 mode_id_str: MODE ID { $2 }
@@ -261,11 +236,6 @@ jump_list: /* */ { [] }
   | jump_str jump_list { $1::$2 }
 ;
 
-/*jump:
-    jump_labels formula IMPLY AT FNUM formula SEMICOLON { Jump.make ($2, int_of_float $5, $6, $1) }
-  | jump_labels formula IMPLY precision AT FNUM formula SEMICOLON { Jump.makep ($2, $4, int_of_float $6, $7, $1) }
-;*/
-
 jump_str: 
 	jump_labels formula IMPLY AT ID formula SEMICOLON { Jump.make ($2, $5, $6, $1) }
   | jump_labels formula IMPLY precision AT ID formula SEMICOLON { Jump.makep ($2, $4, $6, $7, $1) }
@@ -276,9 +246,6 @@ jump_labels:
 ;
 
 init: INIT COLON mode_formula SEMICOLON { $3 }
-;
-
-goal: GOAL COLON mode_formula_list { $3 }
 ;
 
 goal_aut: GOAL COLON goal_aut_elem { $3 }
@@ -297,9 +264,6 @@ loc_list:
 	| COMMA loc_list { $2 }
 ;
 
-ind: IND COLON formula_list { $3 }
-;
-
 formula_list:
   |  { [] }
   | formula SEMICOLON formula_list { $1::$3 }
@@ -311,9 +275,6 @@ mode_formula_list: { [] }
 
 mode_formula: AT ID formula { ($2, $3) }
 ;
-
-/*goal_aut: GOAL COLON mode_formula_aut_list { $3 }
-;*/
 
 mode_formula_aut_list: { [] }
   | mode_formula_aut mode_formula_aut_list { $1::$2 }

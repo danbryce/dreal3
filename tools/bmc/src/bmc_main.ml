@@ -114,6 +114,10 @@ let run () =
       (*	let smt = Bmc.compile_pruned hm !k heuristic heuristic_back (Some rel_back) in *)
       let smt = Bmc.compile hm !k None false in
       Smt2.print out smt
-		 
+    else 
+      let smt = Bmc.compile hm !k None false in
+      Smt2.print out smt
+
+
 	       with v -> Error.handle_exn v
 let _ = Printexc.catch run ()

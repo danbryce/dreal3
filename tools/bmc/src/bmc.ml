@@ -1507,6 +1507,19 @@ let mk_active (n: Network.t) (i: int) =
 	let amodes = List.map (fun a -> (a, List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap a)))) auta in
 	Basic.make_and (List.map (fun (a, mlist) -> Basic.make_and (List.map (fun m -> mk_active_mode a m i) mlist)) amodes)
 	
+let mk_mode_pair_mutex (aut: Hybrid.t) (m: Mode.t) (m1: Mode.t) (i: int) = 
+  let nId = Mode.mode_numId m in
+  let nId1 = Mode.mode_numId m1 in
+  Basic.make_or( [Basic.Not(mk_cnd (mk_enforce i aut) nId);Basic.Not(mk_cnd (mk_enforce i aut) nId1)] )
+
+
+let mk_mode_mutex (n: Network.t) (i: int) = 
+	let auta = Network.automata n in
+	let amodes = List.map (fun a -> (a, List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap a)))) auta in
+	Basic.make_and (List.map (fun (a, mlist) -> 
+				  Basic.make_and (List.map (fun m -> Basic.make_and (List.map (fun m1 -> if m != m1 then mk_mode_pair_mutex a m m1 i else Basic.True) mlist)) mlist)) amodes)
+
+
 (*Integral of float * string * string list * string (* (integral 0 time_1 [x_1_0 ... x_i_0] flow1) *)*)
 
 (*let mk_flow *)
@@ -1518,8 +1531,8 @@ let compile_logic_formula (h : Network.t) (k : int) (path : comppath option) (pr
   let init_clause = mk_init_network h in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
   let steps = match precompute with
-    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(mk_maintain h x);(trans_network_precomposed h x)]) list_of_steps)
-    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_active h x);(mk_maintain h x);(trans_network h x)]) list_of_steps) in
+    | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x);(mk_active h x);(mk_maintain h x);(trans_network_precomposed h x)]) list_of_steps)
+    | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x);(mk_active h x);(mk_maintain h x);(trans_network h x)]) list_of_steps) in
   let goal_clause = mk_goal_network h k in
   let end_step = (*mk_maintain h k*) Basic.make_and [(mk_active h k); (mk_maintain h k)] in
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; [steps]; [goal_clause]]) in

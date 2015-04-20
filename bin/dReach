@@ -174,7 +174,7 @@ do
         if [ $BMCH -eq 1 ]
         then
             # Construct Heuristic function
-            echo $BMC -k $K --bmc_heuristic ${HEURISTIC} $PDRH 
+            #echo $BMC -k $K --bmc_heuristic ${HEURISTIC} $PDRH 
             $BMC -k $K --bmc_heuristic ${HEURISTIC} $PDRH > ${SMT}
             SOLVER_OPT="${SOLVER_OPT} --bmc_heuristic ${HEURISTIC}"
         elif [ $BMCH -lt 3 ]
@@ -201,7 +201,8 @@ do
         #echo SMT: ${SMT}
 
         #Solve
-        ${SOLVER} ${SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta --time_split_heuristic 2>&1 | tee $OUT
+        echo "${SOLVER} ${SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta --time_split_heuristic 2>&1 | tee $OUT"
+        ${SOLVER} ${SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta 2>&1 | tee $OUT
         RESULT=`tail -n 1 $OUT`
         if [[ $RESULT == "sat" ]]
         then

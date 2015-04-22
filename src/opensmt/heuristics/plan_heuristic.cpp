@@ -106,6 +106,12 @@ namespace dreal {
 
           en = new map< string, Enode* >();
           time_duract_enodes.push_back(en);
+
+          en = new map< string, Enode* >();
+          time_fact_enodes.push_back(en);
+
+          en = new map< string, Enode* >();
+          time_func_enodes.push_back(en);
         }
 
         time_enodes.assign(static_cast<int>(m_depth+1), NULL);
@@ -198,8 +204,8 @@ void plan_heuristic::inform(Enode * e) {
     return;
   m_atoms.insert(e);
 
-  //  DREAL_LOG_INFO << "plan_heuristic::inform(): " << e << endl;
-  if (!e->isTAtom() && !e->isNot()) {
+  DREAL_LOG_INFO << "plan_heuristic::inform(): " << e << endl;
+  if (!e->isTAtom() && !e->isNot()){
     unordered_set<Enode *> const & vars = e->get_vars();
     //unordered_set<Enode *> const & consts = e->get_constants();
     for (auto const & v : vars) {
@@ -262,7 +268,7 @@ void plan_heuristic::inform(Enode * e) {
       } else  if (var.find("duract") == 0) {
         int time = atoi(var.substr(var.find_last_of("_")+1).c_str());
         int spos = var.find_first_of("_")+1;
-        int epos = var.find_last_of("_")-1;
+        int epos = var.find_last_of("_");
         string proc = var.substr(spos, epos-spos).c_str();
 
         //  for (auto const & c : consts) {
@@ -276,6 +282,25 @@ void plan_heuristic::inform(Enode * e) {
             int choice = getChoiceIndex(e);
             DREAL_LOG_INFO << "index = " << choice;
             choices[num_choices_per_happening*(time)+choice] = e;
+        //    }
+        //  }
+      } else  if (var.find("fact") == 0) {
+        int time = atoi(var.substr(var.find_last_of("_")+1).c_str());
+        int spos = var.find_first_of("_")+1;
+        int epos = var.find_last_of("_");
+        string fact = var.substr(spos, epos-spos).c_str();
+
+        //  for (auto const & c : consts) {
+        //    stringstream css;
+        //    css << c;
+        //    int cs = atoi(css.str().c_str());
+        //    if (cs == 1){
+            DREAL_LOG_INFO << "fact = " << fact << " time = " << time << endl;
+            (*time_fact_enodes[time])[fact] = e;
+            //duract_enodes.insert(e);
+	    //int choice = getChoiceIndex(e);
+	    //DREAL_LOG_INFO << "index = " << choice;
+	    //choices[num_choices_per_happening*(time)+choice] = e;
         //    }
         //  }
       }
@@ -298,6 +323,13 @@ void plan_heuristic::inform(Enode * e) {
             time_enodes[time] = e;
           }
         }
+      } else if (var.find("func") == 0) {
+	int time = atoi(var.substr(var.find_last_of("_")+1).c_str());
+        int spos = var.find_first_of("_")+1;
+        int epos = var.find_last_of("_")-2;
+        string func = var.substr(spos, epos-spos).c_str();
+	DREAL_LOG_INFO << "func = " << func << " time = " << time << endl;
+	(*time_func_enodes[time])[func] = e;
       }
     }
   }
@@ -914,30 +946,53 @@ bool plan_heuristic::unwind_path() {
       //  }
 }
  
+  void plan_heuristic::getBooleansAtTime(int time, Planner::LiteralSet& booleans){
+    map<string, Enode*> *facts_at_time = time_fact_enodes[time];
+    for(map<string, Enode*>::iterator i = facts_at_time->begin(); i != facts_at_time->end(); i++){
+      DREAL_LOG_DEBUG << (*i).second;
+      if(stack_literals.find((*i).second) != stack_literals.end()){
+	DREAL_LOG_DEBUG << "assn";
+      }
+// if((*i).second->getDecPolarity() == l_True){
+      // 	DREAL_LOG_DEBUG << "true";
+      // } else if((*i).second->getDecPolarity() == l_False){
+      // 	DREAL_LOG_DEBUG << "false";
+      // } else {
+      // 	DREAL_LOG_DEBUG << "unk";
+      // }
+    }
 
-  Planner::ExtendedMinimalState* plan_heuristic::populateStateFromStack(vector<double>& tinitialFluents, Planner::LiteralSet& tinitialState){
+  }
+
+
+  Planner::ExtendedMinimalState* plan_heuristic::populateStateFromStack(vector<double>& reals, Planner::LiteralSet& booleans){
     DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() "; 
+
+    int time =  ((static_cast<int>(m_decision_stack.size()))/
+		 num_choices_per_happening)+1;
+    getBooleansAtTime(time-1, booleans);
+
+    
+
+
+
+
+
+
     Planner::ExtendedMinimalState *my_state = new Planner::ExtendedMinimalState();
 
-    {
-      
-      
-
-      Planner::RPGBuilder::getNonStaticInitialState(tinitialState, tinitialFluents);
-      //DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() got init "; 
-       my_state->getEditableInnerState().setFacts(tinitialState);
-       my_state->getEditableInnerState().setFacts(tinitialFluents);
+    my_state->getEditableInnerState().setFacts(reals);
+    my_state->getEditableInnerState().setFacts(booleans);
        
-      for(auto l : tinitialState){
-      	l->write(cout); cout<< endl;
-      }
-      int p = 0;
-      for(auto l : tinitialFluents){
-      	PNE *my_pne = Planner::RPGBuilder::getPNE(p++);
-      	my_pne->write(cout); cout << " = " << l << endl;
-      }
-
+    for(auto l : booleans){
+      l->write(cout); cout<< endl;
     }
+    int p = 0;
+    for(auto l : reals){
+      PNE *my_pne = Planner::RPGBuilder::getPNE(p++);
+      my_pne->write(cout); cout << " = " << l << endl;
+    }
+
     DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() end"; 
     return my_state;
   }

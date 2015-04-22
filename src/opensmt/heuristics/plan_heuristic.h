@@ -64,6 +64,8 @@ private:
 
     Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluents,Planner::LiteralSet& tinitialState);  
     int getColinHeuristic(int choice);
+    void getBooleansAtTime(int time, Planner::LiteralSet& booleans);
+    
     
 
     // search related data and methods
@@ -91,6 +93,8 @@ private:
     vector< map<string, Enode* >* > time_event_enodes;
     vector< map<string, Enode* >* > time_act_enodes;
     vector< map<string, Enode* >* > time_duract_enodes;
+    vector< map<string, Enode* >* > time_fact_enodes;
+    vector< map<string, Enode* >* > time_func_enodes;
     vector<Enode*> choices;
     map<Enode*, int> choice_indices;
     map<string, int> schoice_indices;

@@ -25,7 +25,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <unordered_set>
 #include <utility>
 #include "plan_heuristic.h"
-#include "json11/json11.hpp"
+#include "json/json.hpp"
 #include "opensmt/egraph/Egraph.h"
 #include "opensmt/tsolvers/TSolver.h"
 #include "util/logging.h"
@@ -35,6 +35,7 @@ using std::ifstream;
 using std::unordered_set;
 using std::ios;
 using std::sort;
+using nlohmann::json;
 
 namespace dreal{
 
@@ -51,37 +52,37 @@ namespace dreal{
     if (c.nra_plan_heuristic.compare("") != 0){
         const string heuristic_string = get_file_contents(c.nra_plan_heuristic.c_str());
         string err;
-        auto json = json11::Json::parse(heuristic_string, err);
+        auto json = json::parse(heuristic_string);
         //  auto hinfo = json.array_items();
 
 
        //   BMC depth
-        m_depth = json["steps"].int_value();
+        m_depth = json["steps"];
         DREAL_LOG_INFO << "plan_heuristic::initialize() #steps = " << m_depth;
 
 
         //   get acts
-        for (auto a : json["actions"].array_items()){
-          m_actions.push_back(a.string_value());
-          DREAL_LOG_INFO << "plan_heuristic::initialize() Action = " << a.string_value();
+        for (auto a : json["actions"]){
+          m_actions.push_back(a);
+          DREAL_LOG_INFO << "plan_heuristic::initialize() Action = " << a;
         }
 
         //   get events
-        for (auto a : json["events"].array_items()){
-          m_events.push_back(a.string_value());
-          DREAL_LOG_INFO << "plan_heuristic::initialize() Event = " << a.string_value();
+        for (auto a : json["events"]){
+          m_events.push_back(a);
+          DREAL_LOG_INFO << "plan_heuristic::initialize() Event = " << a;
         }
 
         //   get processes
-        for (auto a : json["processes"].array_items()){
-          m_processes.push_back(a.string_value());
-          DREAL_LOG_INFO << "plan_heuristic::initialize() Process = " << a.string_value();
+        for (auto a : json["processes"]){
+          m_processes.push_back(a);
+          DREAL_LOG_INFO << "plan_heuristic::initialize() Process = " << a;
         }
 
         //   get durative_acts
-        for (auto a : json["durative_actions"].array_items()){
-          m_durative_actions.push_back(a.string_value());
-          DREAL_LOG_INFO << "plan_heuristic::initialize() Durative Action = " << a.string_value();
+        for (auto a : json["durative_actions"]){
+          m_durative_actions.push_back(a);
+          DREAL_LOG_INFO << "plan_heuristic::initialize() Durative Action = " << a;
         }
 
         for (int i = 0; i < m_depth+1; i++){

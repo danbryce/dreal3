@@ -1803,17 +1803,18 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
         }
 
         if (next == lit_Undef){
+          if( !isSAT ){
           // New variable decision:
           decisions++;
           next = pickBranchLit(polarity_mode, random_var_freq);
-
-
 	  if(next != lit_Undef){
-	    DREAL_LOG_DEBUG << "CoreSMTSolver:: after pickBranchLit() next = def";
-	  } else {
-	    DREAL_LOG_DEBUG << "CoreSMTSolver:: after pickBranchLit() next = undef";
-	  }
+                DREAL_LOG_DEBUG << "CoreSMTSolver::search() Branching at: " << decisionLevel()
+                                << " on: "
+                                << theory_handler->varToEnode(var(next))
+                                << endl;
+            }
 
+	  }
           // Complete Call
           if ( next == lit_Undef )
           {
@@ -1842,6 +1843,11 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
             if ( res == 2 ) { continue; }
             if ( res == -1 ) return l_False;
             assert( res == 1 );
+	    
+	    if(config.nra_short_sat){
+	      if ( res == 1 ) return l_True;
+            }
+
             // Otherwise we still have to make sure that
             // splitting on demand did not add any new variable
             decisions++;

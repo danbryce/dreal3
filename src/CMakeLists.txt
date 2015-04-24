@@ -330,17 +330,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/ibex)
 set(EXTERNAL_LD_FLAGS "-L${CMAKE_CURRENT_BINARY_DIR}/lib")
 
-# Libunwind
-find_package(Libunwind)
-if(LIBUNWIND_FOUND)
-  message(STATUS "libunwind found")
-  message(STATUS "lib: ${LIBUNWIND_LIBRARY}")
-  include_directories(${LIBUNWIND_INCLUDE_DIR})
-  set(EXTRA_LIBS ${EXTRA_LIBS} ${LIBUNWIND_LIBRARY})
-else()
-  message(STATUS "libunwind not found")
-endif()
-
 ################################################################
 # CXX Flags
 ################################################################
@@ -349,29 +338,6 @@ set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -mfpmath=sse -msse -msse2 -f
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -frounding-math")
 endif()
-
-################################################################
-# CAPD LIB
-################################################################
-#set(EXTRA_LIBS ${EXTRA_LIBS} "-lcapddynsysfacade -lcapdcovrel -lcapddiffIncl -lcapdpoincare -lcapddiffAlgebra -lcapddynsys -lcapdmap -lcapddynset -lcapdgeomset -lcapdalgfacade -lcapdmatrixAlgorithms -lcapdvectalg -lprim -lcapdintervals -lcapdrounding -lcapdbasicalg -lcapdauxil -lcapdalglib")
-set(EXTRA_LIBS ${EXTRA_LIBS} "capd")
-set(ODE_ENABLED TRUE)
-
-################################################################
-# FILIB LIB
-################################################################
-set(EXTRA_LIBS "prim" ${EXTRA_LIBS})
-
-################################################################
-# Threads
-################################################################
-find_package (Threads REQUIRED)
-set(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-
-################################################################
-# FLOW STAR REQUIRED LIBS
-################################################################
-#set(EXTRA_LIBS ${EXTRA_LIBS} "-lmpfr -lgmp -lgsl -lgslcblas -lm -lglpk")
 
 ################################################################
 # EGLIBC (Optional)

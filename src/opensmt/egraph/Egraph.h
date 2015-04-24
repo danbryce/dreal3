@@ -27,37 +27,10 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "egraph/SigTab.h"
 #include "common/SplayTree.h"
 #include "util/flow.h"
-#include "util/logging.h"
 
 #ifdef PRODUCE_PROOF
 #include "proof/UFInterpolator.h"
 #endif
-/*
-//for Taylor models
-extern int lineNum;
-extern mpfr_prec_t intervalNumPrecision;
-extern ContinuousReachability continuousProblem;
-extern ParseSetting parseSetting;
-extern ParseResult parseResult;
-extern vector<Interval> gUncertainties;
-*/
-/*
-double dblVal;
-vector<Interval> *intVec;
-vector<int> *iVec;
-vector<double> *dVec;
-vector<Monomial> *monoVector;
-vector<Polynomial> *polyVec;
-Monomial *mono;
-Polynomial *poly;
-TaylorModelVec *tmVec;
-Matrix *mat;
-vector<vector<double> > *dVecVec;
-Flowpipe *pFlowpipe;
-TaylorModel *ptm;
-Interval *pint;
-vector<string> *strVec;
-*/
 
 class Egraph : public CoreTSolver
 {
@@ -229,8 +202,6 @@ public:
   Enode * mkForall ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
   Enode * mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
 
-  Enode * mkConnect	     ( const char *, const char *);
-  Enode * mkPIntegral        ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, vector<char *> * holder);
   /* ----------------- */
 
   Enode * mkSelect           ( Enode *, Enode * );
@@ -277,8 +248,6 @@ public:
   Enode * mkNum              ( const char *, const char * );
   Enode * mkNum              ( const double );
   Enode * mkFun              ( const char *, Enode * );
-
-  Enode * mkName	     (const char *); 
 
   void    mkDefine           ( const char *, Enode * );
   Enode * mkLet              ( Enode * );
@@ -385,13 +354,6 @@ public:
   /* added for dReal */
   std::unordered_map<string, dreal::flow> flow_maps;
   bool                                    stepped_flows; //Does flow name have step index?
-
-  std::set<string>	ODEholders;	//holders to connect with partial ODEs
-
-  //taylor model maps
-  //flowstar doesn't seem to be using pointers for Taylormodels
-//  TaylorModelVec *tmVec;
-//  std::unordered_map<string, std::unordered_map<string, TaylorModel *>> tm_maps;
 
 private:
 

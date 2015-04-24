@@ -683,6 +683,7 @@ Lit CoreSMTSolver::pickBranchLit(int polarity_mode, double random_var_freq)
         default: assert(false); }
       if(next != var_Undef){
         DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Activity Decision: "
+			<< "next = " << next << " " << (next == var_Undef) << " "
                         << sign << " " << theory_handler->varToEnode(next)
 			<< " activity = " << activity[next]
                         << endl;
@@ -1369,7 +1370,6 @@ bool CoreSMTSolver::simplify()
   // Remove fixed variables from the variable heap:
   order_heap.filter(VarFilter(*this));
 
-
   simpDB_assigns = nAssigns();
   simpDB_props   = clauses_literals + learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
 
@@ -1807,9 +1807,17 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
           decisions++;
           next = pickBranchLit(polarity_mode, random_var_freq);
 
+
+	  if(next != lit_Undef){
+	    DREAL_LOG_DEBUG << "CoreSMTSolver:: after pickBranchLit() next = def";
+	  } else {
+	    DREAL_LOG_DEBUG << "CoreSMTSolver:: after pickBranchLit() next = undef";
+	  }
+
           // Complete Call
           if ( next == lit_Undef )
           {
+	    DREAL_LOG_DEBUG << "next == lit_Undef 1";
             first_model_found = true;
 #ifdef STATISTICS
             const double start = cpuTime( );
@@ -1841,13 +1849,6 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
           }
 
           if (next == lit_Undef)
-            // Model found:
-            DREAL_LOG_DEBUG << "CoreSMTSolver::search() Found Model after # decisions "
-                            << decisions << endl;
-	    if(DREAL_LOG_DEBUG_IS_ON){
-	      DREAL_LOG_DEBUG << "Model is:";
-	      printCurrentAssignment(std::cout);
-	    }
             return l_True;
         }
 

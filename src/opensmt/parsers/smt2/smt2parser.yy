@@ -359,7 +359,7 @@ term: spec_const
       { $$ = parser_ctx->mkImplies( $3 ); }
 
     | '(' TK_EQ TK_LB term_list TK_RB
-          '(' TK_INTEGRAL term term TK_LB term_list TK_RB identifier ')'
+                '(' TK_INTEGRAL term term TK_LB term_list TK_RB identifier ')'
       ')'
       {
         $$ = parser_ctx->mkIntegral( $8, $9, $11, $4, $13 );
@@ -427,7 +427,7 @@ term: spec_const
    */
     | identifier
       { $$ = parser_ctx->mkVar( $1 ); free( $1 ); }
- /*
+  /*
    * Function application
    */
     | '(' identifier term_list ')'

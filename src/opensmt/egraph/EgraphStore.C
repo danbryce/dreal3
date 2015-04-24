@@ -155,8 +155,8 @@ void Egraph::initializeStore( )
   newSymbol( "^"         , sarith2_left); assert (ENODE_ID_POW == id_to_enode.size() - 1 );
   newSymbol( "atan2"     , sarith2_left ); assert( ENODE_ID_ATAN2 == id_to_enode.size( ) - 1 );
   newSymbol( "matan"     , sarith1 ); assert( ENODE_ID_MATAN == id_to_enode.size( ) - 1 );
-  newSymbol( "sqrt"      , sarith1 ); assert( ENODE_ID_SQRT == id_to_enode.size() -1 );
   newSymbol( "safesqrt"  , sarith1 ); assert( ENODE_ID_SAFESQRT == id_to_enode.size( ) - 1 );
+  newSymbol( "sqrt"      , sarith1 ); assert( ENODE_ID_SQRT == id_to_enode.size( ) - 1 );
   newSymbol( "forallt"   , sarith1_bool ); assert( ENODE_ID_FORALLT == id_to_enode.size( ) - 1 );
   newSymbol( "integral"  , sarith5_bool ); assert( ENODE_ID_INTEGRAL == id_to_enode.size( ) - 1 );
   newSymbol( "abs"       , sarith1 ); assert( ENODE_ID_ABS == id_to_enode.size( ) - 1 );
@@ -798,7 +798,7 @@ Enode * Egraph::mkPow (Enode * args)
   assert( args->getArity( ) == 2 );
   if (args->getArity( ) != 2) {
       throw std::runtime_error("Egraph::mkPow: The number of arguments should be two.");
- }
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_POW], args );
   assert( res );
   return res;
@@ -917,20 +917,20 @@ Enode * Egraph::mkMatan             ( Enode * args)
   return res;
 }
 
-Enode * Egraph::mkSqrt            ( Enode * args)
-{
-  assert( args );
-  assert( args->getArity( ) == 1 );
-  Enode * res = cons( id_to_enode[ ENODE_ID_SQRT], args );
-  assert( res );
-  return res;
-}
-
 Enode * Egraph::mkSafeSqrt            ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
   Enode * res = cons( id_to_enode[ ENODE_ID_SAFESQRT], args );
+  assert( res );
+  return res;
+}
+
+Enode * Egraph::mkSqrt                ( Enode * args)
+{
+  assert( args );
+  assert( args->getArity( ) == 1 );
+  Enode * res = cons( id_to_enode[ ENODE_ID_SQRT], args );
   assert( res );
   return res;
 }
@@ -968,12 +968,6 @@ Enode * Egraph::mkPlus( Enode * args )
   //
   // Simplify constants
   //
-  if (x->isConstant() && x->getValue() == 0.0) {
-      return y;
-  } else if (y->isConstant() && y->getValue() == 0.0) {
-      return x;
-  }
-  
   if ( x->isConstant( ) && y->isConstant( ) && args->getArity( ) == 2 )
   {
     const double xval = x->getValue( );
@@ -1003,13 +997,6 @@ Enode * Egraph::mkMinus( Enode * args )
 
   Enode * x = args->getCar( );
   Enode * y = args->getCdr( )->getCar( );
-
-  if (x->isConstant() && x->getValue() == 0.0) {
-      return mkUminus(args->getCdr());
-  } else if (y->isConstant() && y->getValue() == 0.0) {
-      return x;
-  }
-  
   Enode * mo = mkNum( "-1" );
 
   res = mkPlus( cons( x, cons( mkTimes( cons( mo, cons( y ) ) ) ) ) );
@@ -1025,7 +1012,7 @@ Enode * Egraph::mkUminus( Enode * args )
   Enode * x = args->getCar( );
   Enode * mo = mkNum( "-1" );
 
-  return mkTimes( cons( mo, cons(x) ) );
+  return mkTimes( cons( mo, cons( x ) ) );
 }
 
 Enode * Egraph::mkTimes( Enode * args )

@@ -601,12 +601,8 @@ void OpenSMTContext::DeclareFun( const char * name, Snode * s )
          << " of sort "
          << s
          << endl;
-  egraph.newSymbol( name, s );
 
-  if (s->hasSortReal()){
-	string name_s(name);
-	//continuousProblem.declareStateVar(name_s);
-  }
+  egraph.newSymbol( name, s );
 }
 
 void OpenSMTContext::DefineODE( char const * name, vector<pair<string, Enode *> *> * odes)
@@ -619,12 +615,6 @@ void OpenSMTContext::DefineODE( char const * name, vector<pair<string, Enode *> 
     string const sname (name);
     egraph.stepped_flows = (sname.find_first_of("_") != sname.find_last_of("_"));
     egraph.flow_maps[name] = _flow;
-}
-
-void OpenSMTContext::DefineODEholder(char const * name)
-{
-	string const sname(name);
-	egraph.ODEholders.insert(sname);
 }
 
 void OpenSMTContext::Push( )

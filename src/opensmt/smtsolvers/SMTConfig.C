@@ -140,17 +140,14 @@ SMTConfig::initializeConfig( )
   nra_use_delta_heuristic      = false;
   nra_short_sat                = false;
   nra_bmc_heuristic            = "";
-<<<<<<< HEAD
   nra_aggressive               = 0;
   nra_sample                   = 0;
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
-=======
   nra_plan_heuristic           = "";
   nra_plan_domain              = "";
   nra_plan_problem             = "";
->>>>>>> 3f7c91e... feat(heuristics): colin heuristic computation (for initial state)
   nra_output_num_nodes         = false;
 }
 

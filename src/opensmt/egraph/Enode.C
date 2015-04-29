@@ -17,11 +17,12 @@ You should have received a copy of the GNU General Public License
 along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
+#include <iomanip>
 #include "Enode.h"
 #include "util/string.h"
 
 using std::unordered_set;
-
+using std::setprecision;
 //
 // Constructor for ENIL
 //
@@ -323,14 +324,14 @@ void Enode::print_infix(ostream & os, lbool polarity, string const & variable_po
         if (name.find('e') != std::string::npos || name.find('E') != std::string::npos) {
             // Scientific Notation
             double r = *(symb_data->value);
-            os << std::fixed << r;
+            os << setprecision(16) << std::fixed << "(" << r << ")";
         } else {
             // Fixed Notation
-            os << name;
+	  os << "(" << name << ")";
         }
     } else if (isTerm()) {
         // output "("
-        if (!getCdr()->isEnil() && (isPlus() || isMinus() || isTimes() || isPow())) {
+      if (!getCdr()->isEnil() && (isPlus() || isMinus() || isTimes() || isPow() || isDiv())) {
             os << "(";
         }
         // !(X = Y) ==> (0 = 0)
@@ -380,7 +381,7 @@ void Enode::print_infix(ostream & os, lbool polarity, string const & variable_po
             // output 1st argument
             getCdr()->getCdr()->getCar()->print_infix(os, polarity, variable_postfix);
             os << ")";
-        } else if (isAcos() || isAsin() || isAtan() || isMatan() || isSafeSqrt() ||
+        } else if (isAcos() || isAsin() || isAtan() || isMatan() || isSafeSqrt() || isSqrt() ||
                    isSin() || isCos() || isTan() || isLog() || isExp() || isSinh() || isCosh() || isTanh() || isAbs()) {
             assert(getArity() == 1);
             // output operator
@@ -400,7 +401,7 @@ void Enode::print_infix(ostream & os, lbool polarity, string const & variable_po
             }
         }
         // output ")"
-        if (!getCdr()->isEnil() && (isPlus() || isMinus() || isTimes() || isPow())) {
+        if (!getCdr()->isEnil() && (isPlus() || isMinus() || isTimes() || isPow() || isDiv())) {
             os << ")";
         }
     } else if (isList()) {
@@ -430,7 +431,7 @@ void Enode::print(ostream & os) const {
         os << getName();
     } else if (isNumb()) {
         double r = *(symb_data->value);
-        os << r;
+        os << setprecision(16) << r;
     } else if (isTerm()) {
         if (!cdr->isEnil())
             os << "(";

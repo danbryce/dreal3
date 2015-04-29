@@ -293,7 +293,7 @@ spec_const: numeral
             { $$ = $1; } */
           | TK_STR
             { $$ = $1; }
-          ;
+	   ;
 
 identifier: TK_SYM
             { $$ = $1; }

@@ -157,7 +157,7 @@ char * pbuffer2;
 "max"                        { return TK_MAX; }
 "atan2"|"arctan2"            { return TK_ATAN2; }
 "matan"|"marctan"            { return TK_MATAN; }
-"sqrt"                       { return TK_SQRT; }
+"sqrt"			     { return TK_SQRT; }
 "safesqrt"                   { return TK_SAFESQRT; }
 "^"|"pow"                    { return TK_POW; }
 

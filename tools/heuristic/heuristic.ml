@@ -63,7 +63,7 @@ module Heuristic = struct
 	(Mode.flows mode)
     in
     begin
-      while not ((Ref.get new_vars) = (Ref.get old_vars)) do
+      while  ((BatSet.cardinal (Ref.get new_vars)) - (BatSet.cardinal (Ref.get old_vars)) > 0) do
 	begin
 	  old_vars := Ref.get new_vars;
 	  (*
@@ -102,12 +102,12 @@ module Heuristic = struct
 						      (List.map get_prev_modes (List.of_enum (Map.keys next)))
 						      BatSet.empty))
     in 
-    (*
+(*    
     let () = print_endline "" in
     let () = Printf.fprintf IO.stdout "Relevant modes at: %d "step in
     let () = List.print ~first:"[" ~last:"]" ~sep:","  (fun out m -> Int.print out (Mode.mode_id m)) IO.stdout relevant_modes in
     let () = print_endline "" in
-     *)
+ *)   
     let relevant_var = Relevantvariables.of_modelist relevant_modes in
     let  get_relevant_mode_mode_variables (mode : Mode.t) (nm : Mode.t) (jm : Jumpmap.t) = 
       (*
@@ -152,7 +152,7 @@ module Heuristic = struct
       let depvars = BatSet.union (BatSet.union guard_vars invariant_vars) (Map.find nm.mode_id next) in
       let flow_vars = get_relevant_flow_vars mode depvars h in
       
-      (*
+    (*  
       let () = print_endline "" in
       let () = Printf.fprintf IO.stdout "Relevant Guards:" in
       let () = BatSet.print ~first:"[" ~last:"]" ~sep:","  String.print IO.stdout guard_vars in
@@ -163,7 +163,7 @@ module Heuristic = struct
      let () = Printf.fprintf IO.stdout "Relevant Invariants:" in
       let () = BatSet.print ~first:"[" ~last:"]" ~sep:","  String.print IO.stdout invariant_vars in
       let () = print_endline "" in
-       *)
+     *)
 
       BatSet.union flow_vars depvars
 
@@ -195,6 +195,14 @@ module Heuristic = struct
 			  relevant_modes
 			  relevant_var
     in
+
+      (*
+      let () = print_endline "" in
+      let () = Printf.fprintf IO.stdout "Relevant at %d" step in
+      let () = Relevantvariables.print IO.stdout relevant_vars in
+      let () = print_endline "" in
+       *)
+
     if step > 0 then
       List.append 
 	(relevantgenr_back h k (step-1) heuristic heuristic_back relevant_vars)
@@ -236,23 +244,26 @@ module Heuristic = struct
 
     in
    
-  (*  
+    (*
     let () = print_endline "relevant goal vars:" in
     let () = Relevantvariables.print IO.stdout relevant_goal_vars in
     let () = print_endline "" in 
-   *)
+     *)
+
+    let result =
     if k > 0 then
       List.append 
 	(relevantgenr_back h k (k-1) heuristic heuristic_back relevant_goal_vars) 
 	[ relevant_goal_vars ]
     else
       [ relevant_goal_vars ]
-
+    in
     (*
     let () = print_endline "relevant goal vars:" in
     let () = Relevantvariables.print IO.stdout relevant_goal_vars in
     let () = print_endline "" in 
-     *)
+    *)
+    result
 (*
     let openempty = BatHeap.empty   in
     let openq = List.fold_right (fun e h -> BatHeap.insert h (SearchNode.make (0.0, e)) ) goal_mode_ids openempty  in
@@ -284,11 +295,7 @@ let get_new_adjacent (min_mode : SearchNode.t) (closed : SearchNode.t BatSet.t) 
   let get_costs (openq : SearchNode.t BatHeap.t) (closed : SearchNode.t BatSet.t) 
 		(costs : Costmap.t) (h : Hybrid.t) (fwd : bool) 
       : Costmap.t =
-    (*
-    let () = print_endline "Open list:" in
-     let () = List.iter (printf "%d ") openl in
-     let () = print_endline "" in
-     *)
+    
     (*
     let cost_compare (a : id) (b : id) : int = 
       let a_cost = Map.find a costs in
@@ -411,7 +418,7 @@ let get_new_adjacent (min_mode : SearchNode.t) (closed : SearchNode.t BatSet.t) 
     let openempty = BatHeap.empty   in
     let openq = List.fold_right (fun e h -> BatHeap.insert h (SearchNode.make (0.0, e)) ) goal_mode_ids openempty  in
     let closed = BatSet.empty in
-    let final_costs = (get_costs openq closed initcosts h) true in
+    let final_costs = (get_costs openq closed initcosts h) false in
    (*
     let () = print_endline "goal Costs:" in
     let () = Costmap.print IO.stdout final_costs in

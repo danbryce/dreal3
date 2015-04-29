@@ -41,6 +41,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/mtl/Sort.h"
 #include <cmath>
 #include "util/logging.h"
+#include "heuristics/heuristic.h"
+#include "heuristics/plan_heuristic.h"
+#include "heuristics/hybrid_heuristic.h"
 
 #ifndef OPTIMIZE
 #include <iostream>
@@ -105,6 +108,16 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
 #endif
   , init                  (false)
 {
+
+  if(c.nra_plan_heuristic.compare("") != 0){
+    heuristic = new dreal::plan_heuristic();
+  } else if(c.nra_bmc_heuristic.compare("") != 0){
+    heuristic = new dreal::hybrid_heuristic();
+  } else {
+    heuristic = new dreal::heuristic();
+  } 
+
+
 
 }
 
@@ -178,6 +191,8 @@ CoreSMTSolver::~CoreSMTSolver()
 #ifdef PRODUCE_PROOF
   delete proof_;
 #endif
+
+  delete heuristic;
 }
 
 //=================================================================================================
@@ -419,7 +434,10 @@ void CoreSMTSolver::cancelUntil(int level)
     else
       trail_lim.shrink(trail_lim.size() - level);
 
-    if ( first_model_found ) theory_handler->backtrack( );
+    if ( first_model_found ) {
+      theory_handler->backtrack( );
+    }
+    heuristic->backtrack();      
   }
 }
 
@@ -483,6 +501,7 @@ void CoreSMTSolver::addNewAtom( Enode * e )
   // Automatically adds new variable for e
   //Lit l = theory_handler->enodeToLit( e );
   theory_handler->enodeToLit( e );
+  heuristic->inform(e);  
 }
 
 void CoreSMTSolver::cancelUntilVar( Var v )
@@ -516,6 +535,7 @@ void CoreSMTSolver::cancelUntilVar( Var v )
   }
 
   theory_handler->backtrack( );
+  heuristic->backtrack();  
 }
 
 void CoreSMTSolver::cancelUntilVarTempInit( Var v )
@@ -544,6 +564,7 @@ void CoreSMTSolver::cancelUntilVarTempInit( Var v )
 
   trail.shrink(trail.size( ) - c );
   theory_handler->backtrack( );
+  heuristic->backtrack();
 }
 
 void CoreSMTSolver::cancelUntilVarTempDone( )
@@ -569,7 +590,7 @@ void CoreSMTSolver::cancelUntilVarTempDone( )
     vec< Lit > conflicting;
     int        max_decision_level;
     theory_handler->getConflict( conflicting, max_decision_level );
-  }
+  } 
 }
 
 //=================================================================================================
@@ -589,6 +610,15 @@ Lit CoreSMTSolver::pickBranchLit(int polarity_mode, double random_var_freq)
     for( ;; )
     {
       Lit sugg = theory_handler->getSuggestion( );
+      if(var(sugg) != var_Undef){
+        DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Theory Suggested Decision: "
+                        << sign(sugg) << " " << theory_handler->varToEnode(var(sugg))
+			<< " activity = " << activity[var(sugg)]
+                        << endl;
+      }
+      else{
+        DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Theory Suggested Decision: var_Undef" << endl;
+      }
       // No suggestions
       if ( sugg == lit_Undef )
         break;
@@ -598,6 +628,30 @@ Lit CoreSMTSolver::pickBranchLit(int polarity_mode, double random_var_freq)
       // If here, good decision has been found
       return sugg;
     }
+
+    // Heuristic suggestion-based decision
+    for( ;; )
+    {
+      Lit sugg = heuristic->getSuggestion( );
+      if(var(sugg) != var_Undef){
+        DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Heuristic Suggested Decision: "
+			<< sign(sugg) << " " << theory_handler->varToEnode(var(sugg))
+			<< " activity = " << activity[var(sugg)]
+			<< endl;
+      }
+      else{
+        DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Heuristic Suggested Decision: var_Undef" << endl;
+      }
+      // No suggestions
+      if ( sugg == lit_Undef )
+        break;
+      // Atom already assigned or not to be used as decision
+      if ( toLbool(assigns[var(sugg)]) != l_Undef || !decision_var[var(sugg)] )
+        continue;
+      // If here, good decision has been found
+      return sugg;
+    }
+    
 
     // Activity based decision:
     while (next == var_Undef || toLbool(assigns[next]) != l_Undef || !decision_var[next])
@@ -627,7 +681,13 @@ Lit CoreSMTSolver::pickBranchLit(int polarity_mode, double random_var_freq)
         case polarity_user:  sign = polarity[next]; break;
         case polarity_rnd:   sign = irand(random_seed, 2); break;
         default: assert(false); }
-
+      if(next != var_Undef){
+        DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Activity Decision: "
+			<< "next = " << next << " " << (next == var_Undef) << " "
+                        << sign << " " << theory_handler->varToEnode(next)
+			<< " activity = " << activity[next]
+                        << endl;
+      }
                  return next == var_Undef ? lit_Undef : Lit(next, sign);
 }
 
@@ -1433,6 +1493,8 @@ CoreSMTSolver::popBacktrackPoint ( )
 #endif
   // Backtrack theory solvers
   theory_handler->backtrack( );
+  heuristic->backtrack();
+
   // Restore OK
   restoreOK( );
   assert( isOK( ) );
@@ -1710,14 +1772,53 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
           }
         }
 
+        bool isSAT = false;
+        if(config.nra_short_sat){
+          //check if SAT, even if not all literals are assigned
+          isSAT = true;
+          for (int c = 0; c < nClauses(); c++) {
+            if (!satisfied(*clauses[c])) {
+              isSAT = false;
+              break;
+            }
+          }
+
+	  //Filter variables that don't need assignment
+	  filterUnassigned();
+
+          if( isSAT ){
+            DREAL_LOG_DEBUG << "CoreSMTSolver::search() Found Model after # decisions " << decisions << endl;
+            //first_model_found = true;
+            next = lit_Undef;
+          }
+          else{
+            DREAL_LOG_DEBUG << "CoreSMTSolver::search() not SAT yet" << endl;
+          }
+	  
+	  if(DREAL_LOG_DEBUG_IS_ON){
+	    DREAL_LOG_DEBUG << "Model is:";
+	    printCurrentAssignment(std::cout);
+	  }
+
+        }
+
         if (next == lit_Undef){
+          if( !isSAT ){
           // New variable decision:
           decisions++;
           next = pickBranchLit(polarity_mode, random_var_freq);
+	  if(next != lit_Undef){
+                DREAL_LOG_DEBUG << "CoreSMTSolver::search() Branching at: " << decisionLevel()
+                                << " on: "
+                                << theory_handler->varToEnode(var(next))
+                                << endl;
+            }
 
+	  }
           // Complete Call
           if ( next == lit_Undef )
           {
+	    DREAL_LOG_DEBUG << "next == lit_Undef 1";
             first_model_found = true;
 #ifdef STATISTICS
             const double start = cpuTime( );
@@ -1742,6 +1843,11 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
             if ( res == 2 ) { continue; }
             if ( res == -1 ) return l_False;
             assert( res == 1 );
+	    
+	    if(config.nra_short_sat){
+	      if ( res == 1 ) return l_True;
+            }
+
             // Otherwise we still have to make sure that
             // splitting on demand did not add any new variable
             decisions++;
@@ -1749,7 +1855,6 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
           }
 
           if (next == lit_Undef)
-            // Model found:
             return l_True;
         }
 
@@ -1763,6 +1868,8 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
   }
 }
 
+void CoreSMTSolver::filterUnassigned(){
+}
 
 double CoreSMTSolver::progressEstimate() const
 {
@@ -1910,8 +2017,10 @@ lbool CoreSMTSolver::solve( const vec<Lit> & assumps
   {
     // We terminate
     cancelUntil(-1);
-    if ( first_model_found )
+    if ( first_model_found ) {
       theory_handler->backtrack( );
+      heuristic->backtrack();
+    }
   }
   else
   {

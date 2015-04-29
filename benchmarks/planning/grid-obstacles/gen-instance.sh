@@ -7,13 +7,13 @@ ADJACENCY="//set<pair<int, int>*> adjacent = {"
 
 outputInit(){
     echo "init:"
-    echo "@1 true;"
+    echo "@1 (x = 1);"
 }
 
 outputGoal(){
     END=`expr ${DIMENSION} \* ${DIMENSION}`
     echo "goal:"
-    echo "@${END} true;"
+    echo "@${END} (x = 1);"
 }
 
 convertXYtoMode(){
@@ -145,4 +145,4 @@ outputGoal
 
 
 ADJACENCY=${ADJACENCY}"};"
-echo $ADJACENCY
+#echo $ADJACENCY

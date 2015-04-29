@@ -178,6 +178,7 @@ struct SMTConfig
 
   // SMT related parameters used by dReal
   string       nra_bmc_heuristic;             // Use BMC variable selection heuristic in Minisat from file
+  string       nra_plan_heuristic;            // Use planning variable selection heuristic in Minisat from file
 
   // NRA-Solver related parameters (added for dReal2)
   bool         nra_delta_test;                // precision=(nra_delta_test ? delta : epsilon)
@@ -211,6 +212,7 @@ struct SMTConfig
   unsigned     nra_multiple_soln;             // maximum number of solutions to find
   unsigned     nra_found_soln;                // number of solutions found so far
   bool         nra_polytope;                  // use polytope contractor in IBEX
+  bool         nra_output_num_nodes;          // output number of SAT and ICP nodes to stdout
 
 private:
 

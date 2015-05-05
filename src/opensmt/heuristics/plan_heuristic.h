@@ -30,8 +30,10 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <set>
 #include <string>
 #include <utility>
-#include "colin/FFSolver.h"
 
+#ifdef WITH_COLIN
+#include "colin/FFSolver.h"
+#endif
 
 namespace dreal {
 class plan_heuristic : public heuristic {
@@ -61,11 +63,11 @@ private:
     set<int> numericGoals;
 
     
-
+#ifdef WITH_COLIN
     Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluents,Planner::LiteralSet& tinitialState);  
     int getColinHeuristic(int choice);
     void getBooleansAtTime(int time, Planner::LiteralSet& booleans);
-    
+#endif    
     
 
     // search related data and methods

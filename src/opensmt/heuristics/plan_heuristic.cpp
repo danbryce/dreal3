@@ -29,6 +29,9 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "opensmt/egraph/Egraph.h"
 #include "opensmt/tsolvers/TSolver.h"
 #include "util/logging.h"
+#include <algorithm>
+
+#ifdef WITH_COLIN
 #include "colin/RPGBuilder.h"
 #include "colin/val/TIM.h"
 #include "colin/FFSolver.h"
@@ -36,7 +39,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "colin/globals.h"
 #include "colin/lpscheduler.h"
 #include "colin/numericanalysis.h"
-
+#endif
 
 using std::string;
 using std::ifstream;
@@ -124,7 +127,8 @@ namespace dreal {
 	// first_decision->push_back(false);
 	// m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
 
-  Planner::FF::steepestDescent = false;
+#ifdef WITH_COLIN
+	Planner::FF::steepestDescent = false;
     Planner::FF::incrementalExpansion = false;
     Planner::FF::invariantRPG = false;
     Planner::FF::timeWAStar = false;
@@ -194,6 +198,8 @@ namespace dreal {
     bool reachesGoals;
     
     Planner::FF::getMyHeuristic(reachesGoals);
+#endif
+
 
     DREAL_LOG_DEBUG << "plan_heuristic::initialize() done"; 
     }
@@ -559,7 +565,7 @@ bool plan_heuristic::expand_path() {
 
     first_path = false;
     bool found_step = false;
-    int steps_to_add = min(1, (num_choices_per_happening*m_depth)-
+    int steps_to_add = std::min(1, (num_choices_per_happening*m_depth)-
 			   static_cast<int>(m_decision_stack.size()));
 
     bool no_steps_left = false;
@@ -599,8 +605,12 @@ bool plan_heuristic::expand_path() {
 	}	
       }
       if(!found_existing_value){
-	double before_decision_value = getColinHeuristic(-1); //value if do nothing
-	double after_decision_value = getColinHeuristic(choice); //value if do choice
+	double before_decision_value = 0;
+	double after_decision_value = 0;
+#ifdef WITH_COLIN
+	before_decision_value = getColinHeuristic(-1); //value if do nothing
+	after_decision_value = getColinHeuristic(choice); //value if do choice
+#endif
 	if(before_decision_value <= after_decision_value){
 	  // adding this action does not improve heuristic value
 	  current_decision->push_back(false);
@@ -945,6 +955,8 @@ bool plan_heuristic::unwind_path() {
       //                   << endl;
       //  }
 }
+
+#ifdef WITH_COLIN
  
   void plan_heuristic::getBooleansAtTime(int time, Planner::LiteralSet& booleans){
     map<string, Enode*> *facts_at_time = time_fact_enodes[time];
@@ -1031,5 +1043,7 @@ bool plan_heuristic::unwind_path() {
      // DREAL_LOG_DEBUG << "plan_heuristic::getColinHeuristic() end";
      return hvalue.heuristicValue;   
   }
+
+#endif
 
 }

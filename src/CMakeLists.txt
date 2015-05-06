@@ -46,12 +46,7 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
-if(WITH_COLIN)
-set(DREAL_EXTRA_LINKER_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES
--DPOPF3ANALYSIS -DWITH_COLIN")
-set(DREAL_EXTRA_CXX_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES
--DPOPF3ANALYSIS -DWITH_COLIN")
-endif(WITH_COLIN)
+
 
 ################################################################
 # Set Module Path
@@ -231,6 +226,10 @@ set(DREAL_LIBS ${DREAL_LIBS}  "ColinCommon")
      -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libParsePDDL.a ${CMAKE_CURRENT_BINARY_DIR}/lib/libParsePDDL.a
      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libInst.a ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libParsePDDL.a
    )
+   
+#set(DREAL_EXTRA_LINKER_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES -DPOPF3ANALYSIS -DWITH_COLIN")
+set(DREAL_EXTRA_CXX_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES
+-DPOPF3ANALYSIS -DWITH_COLIN")
 
 endif(WITH_COLIN)
 
@@ -313,6 +312,41 @@ ExternalProject_Add(CLP
   INSTALL_COMMAND make install
 )
 set(EXTRA_LIBS "ClpSolver" "Clp" "CoinUtils" "m" ${EXTRA_LIBS})
+################################################################
+# External: CBC
+################################################################
+if(WITH_COLIN)
+ExternalProject_Add(CBC
+  DEPEND CGL CLP
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/coin-or/Cbc.git
+  GIT_TAG origin/master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --enable-static --with-blas=BUILD --with-lapack=BUILD --disable-bzlib --disable-zlib
+  BUILD_COMMAND make -j
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND make install
+)
+set(COLIN_LIBS "Cbc" ${COLIN_LIBS})
+endif(WITH_COLIN)
+
+################################################################
+# External: CGL
+################################################################
+if(WITH_COLIN)
+ExternalProject_Add(CGL
+  DEPENDS CLP
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/coin-or/Cgl.git
+  GIT_TAG origin/master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --enable-static --with-blas=BUILD --with-lapack=BUILD --disable-bzlib --disable-zlib
+  BUILD_COMMAND make -j
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND make install
+)
+set(COLIN_LIBS "Cgl" ${COLIN_LIBS})
+endif(WITH_COLIN)
 
 ################################################################
 # External: ibex
@@ -405,6 +439,26 @@ ExternalProject_Add(JSON
 )
 
 ################################################################
+# External: npg (Numeric Planning Graph from Colin Planner)
+################################################################
+if(WITH_COLIN)
+set(CLP_INCLUDES "include/coin")
+set(CLP_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
+ ExternalProject_Add(npg
+  DEPENDS CLP CGL CBC
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/danbryce/npg.git
+  GIT_TAG origin/master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  CONFIGURE_COMMAND cmake -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_BUILD_TYPE=Release  "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_BINARY_DIR}/${CLP_INCLUDES}" "-DCOLIN_LIBS=${COLIN_LIBS}" -DCLP_LIB_PATH=${CLP_LIB_PATH} ./src
+  BUILD_COMMAND make -j
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND cp -v colin/libColinCommon.a ${CMAKE_CURRENT_BINARY_DIR}/lib
+)
+set(EXTRA_LIBS ColinCommon ${EXTRA_LIBS})
+endif(WITH_COLIN)
+
+################################################################
 # Threads
 ################################################################
 find_package (Threads REQUIRED)
@@ -485,6 +539,16 @@ else()
   add_library(dreal ${DREAL_SRCS})
 endif()
 
+if(WITH_COLIN)
+add_dependencies(npg CLP)
+add_dependencies(npg CGL)
+add_dependencies(npg CBC)
+add_dependencies(CBC CGL)
+add_dependencies(CBC CLP)
+endif(WITH_COLIN)
+
+
+
 add_dependencies(dreal IBEX)
 add_dependencies(dreal GLOG)
 add_dependencies(dreal GFLAGS)
@@ -510,11 +574,6 @@ if(SUPPORT_ODE)
   add_subdirectory(tests/capd4)
   add_subdirectory(tests/nra_ode)
 endif()
-
-if(WITH_COLIN)
-add_dependencies(dReal colin_copy)
-add_dependencies(dReal val_copy)
-endif(WITH_COLIN)
 
 # Include style check
 include(StyleCheck)

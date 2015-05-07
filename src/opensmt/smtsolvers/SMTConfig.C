@@ -35,8 +35,6 @@ DEFINE_string(plan_heuristic,      "", "plan heuristic");
 DEFINE_string(plan_domain,         "", "plan domain");
 DEFINE_string(plan_problem,        "", "plan problem");
 DEFINE_bool(output_num_nodes,   false, "ouput num nodes");
-DEFINE_string(plan_domain,         "", "plan domain");
-DEFINE_string(plan_problem,        "", "plan problem");
 DEFINE_bool  (short_sat,        false, "short sat");
 DEFINE_double(ode_step,           0.0, "ode step");
 DEFINE_uint64(ode_order,           20, "ode order");

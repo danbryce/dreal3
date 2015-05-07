@@ -496,7 +496,7 @@ void plan_heuristic::inform(Enode * e) {
   }
 
   void plan_heuristic::completeSuggestionsForTrail(){
-    for(int i = m_decision_stack.size()-1; i < m_decision_stack.size(); i++){
+    for(unsigned int i = m_decision_stack.size()-1; i < m_decision_stack.size(); i++){
       pair<Enode*, vector<bool>*>* decision = m_decision_stack[i];
       if(decision->first != NULL) {
         m_suggestions.push_back(new std::pair<Enode *, bool>(decision->first, decision->second->back()));

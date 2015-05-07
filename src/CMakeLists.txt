@@ -168,69 +168,8 @@ SET(CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES
 
 if(WITH_COLIN)
 set(DREAL_LIBS ${DREAL_LIBS}  "colin")
-include_directories(${DREAL_SOURCE_DIR}/colin)
-include_directories(${DREAL_SOURCE_DIR}/colin/val)
-add_custom_target(colin_copy)
-   add_custom_command(
-    TARGET colin_copy PRE_BUILD
-    COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libcolin.a
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libcolin.a
-    COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libColinCommon.a
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libColinCommon.a
-   COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libCgl.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libCgl.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libOsiClp.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libOsiClp.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libOsi.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libOsi.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libCbc.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libCbc.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libCbcSolver.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libCbcSolver.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libClp.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libClp.dylib
- COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/libCoinUtils.dylib
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libCoinUtils.dylib
-
-
-     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/colin/libcolin.a
-   )
-
-set(DREAL_LIBS ${DREAL_LIBS}  "Inst")
-set(DREAL_LIBS ${DREAL_LIBS}  "ParsePDDL")
-set(DREAL_LIBS ${DREAL_LIBS}  "Cgl")
-set(DREAL_LIBS ${DREAL_LIBS}  "OsiClp")
-set(DREAL_LIBS ${DREAL_LIBS}  "Osi")
-set(DREAL_LIBS ${DREAL_LIBS}  "Cbc")
-set(DREAL_LIBS ${DREAL_LIBS}  "CbcSolver")
-set(DREAL_LIBS ${DREAL_LIBS}  "Clp")
-set(DREAL_LIBS ${DREAL_LIBS}  "CoinUtils")
-set(DREAL_LIBS ${DREAL_LIBS}  "ColinCommon")
-
- add_custom_target(val_copy)
-   add_custom_command(
-     TARGET val_copy PRE_BUILD
-     COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libInst.a
-     ${CMAKE_CURRENT_BINARY_DIR}/lib/libInst.a
-     COMMAND ${CMAKE_COMMAND}
-     -E copy ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libParsePDDL.a ${CMAKE_CURRENT_BINARY_DIR}/lib/libParsePDDL.a
-     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libInst.a ${CMAKE_CURRENT_SOURCE_DIR}/colin/val/libParsePDDL.a
-   )
-   
-#set(DREAL_EXTRA_LINKER_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES -DPOPF3ANALYSIS -DWITH_COLIN")
 set(DREAL_EXTRA_CXX_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES
 -DPOPF3ANALYSIS -DWITH_COLIN")
-
 endif(WITH_COLIN)
 
 ################################################################
@@ -453,7 +392,7 @@ set(CLP_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
   CONFIGURE_COMMAND cmake -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_BUILD_TYPE=Release  "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_BINARY_DIR}/${CLP_INCLUDES}" "-DCOLIN_LIBS=${COLIN_LIBS}" -DCLP_LIB_PATH=${CLP_LIB_PATH} ./src
   BUILD_COMMAND make -j
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND cp -v colin/libColinCommon.a ${CMAKE_CURRENT_BINARY_DIR}/lib
+  INSTALL_COMMAND cp -v colin/libcolin.a ${CMAKE_CURRENT_BINARY_DIR}/lib
 )
 set(EXTRA_LIBS ColinCommon ${EXTRA_LIBS})
 endif(WITH_COLIN)

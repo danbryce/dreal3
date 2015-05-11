@@ -46,8 +46,6 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
-
-
 ################################################################
 # Set Module Path
 ################################################################
@@ -166,12 +164,6 @@ SET(CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES
   /usr/lib64 /usr/lib32 /usr/lib /lib
   )
 
-if(WITH_COLIN)
-set(DREAL_LIBS ${DREAL_LIBS}  "colin")
-set(DREAL_EXTRA_CXX_FLAGS "-D__USE_FILIB__ -DTOTALORDERSTATES
--DPOPF3ANALYSIS -DWITH_COLIN")
-endif(WITH_COLIN)
-
 ################################################################
 # Packages
 ################################################################
@@ -256,7 +248,7 @@ set(EXTRA_LIBS "ClpSolver" "Clp" "CoinUtils" "m" ${EXTRA_LIBS})
 ################################################################
 if(WITH_COLIN)
 ExternalProject_Add(CBC
-  DEPEND CGL CLP
+  #DEPEND CGL CLP
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   GIT_REPOSITORY https://github.com/coin-or/Cbc.git
   GIT_TAG origin/master
@@ -266,7 +258,7 @@ ExternalProject_Add(CBC
   BUILD_IN_SOURCE 1
   INSTALL_COMMAND make install
 )
-set(COLIN_LIBS "Cbc" ${COLIN_LIBS})
+set(COLIN_LIBS "Cbc" "CbcSolver" ${COLIN_LIBS})
 endif(WITH_COLIN)
 
 ################################################################
@@ -285,6 +277,7 @@ ExternalProject_Add(CGL
   INSTALL_COMMAND make install
 )
 set(COLIN_LIBS "Cgl" ${COLIN_LIBS})
+set(EXTRA_LIBS "Cgl" "Osi" "OsiClp" "Cbc" ${EXTRA_LIBS})
 endif(WITH_COLIN)
 
 ################################################################
@@ -381,10 +374,15 @@ ExternalProject_Add(JSON
 # External: npg (Numeric Planning Graph from Colin Planner)
 ################################################################
 if(WITH_COLIN)
+
+set(DREAL_LIBS ${DREAL_LIBS}  "colin")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTOTALORDERSTATES -DPOPF3ANALYSIS -DWITH_COLIN")
+
 set(CLP_INCLUDES "include/coin")
 set(CLP_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
- ExternalProject_Add(npg
-  DEPENDS CLP CGL CBC
+ ExternalProject_Add(NPG
+  DEPENDS CLP CGL CBC 
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   GIT_REPOSITORY https://github.com/danbryce/npg.git
   GIT_TAG origin/master
@@ -392,9 +390,33 @@ set(CLP_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
   CONFIGURE_COMMAND cmake -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_BUILD_TYPE=Release  "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_BINARY_DIR}/${CLP_INCLUDES}" "-DCOLIN_LIBS=${COLIN_LIBS}" -DCLP_LIB_PATH=${CLP_LIB_PATH} ./src
   BUILD_COMMAND make -j
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND cp -v colin/libcolin.a ${CMAKE_CURRENT_BINARY_DIR}/lib
+  INSTALL_COMMAND cp -v colin/libcolin.a 
+  ${CMAKE_CURRENT_BINARY_DIR}/lib && cp -v VALfiles/libInst.a
+  ${CMAKE_CURRENT_BINARY_DIR}/lib && cp -v
+  VALfiles/parsing/libParsePDDL.a  ${CMAKE_CURRENT_BINARY_DIR}/lib &&
+#  mkdir -v ${CMAKE_CURRENT_BINARY_DIR}/include/val &&
+ #   mkdir -v ${CMAKE_CURRENT_BINARY_DIR}/include/val/parsing &&
+  ln -s ${CMAKE_CURRENT_BINARY_DIR}/external/src/npg/src/colin/
+  ${CMAKE_CURRENT_BINARY_DIR}/include/colin  &&
+  ln -s ${CMAKE_CURRENT_BINARY_DIR}/external/src/npg/src/VALfiles/
+  ${CMAKE_CURRENT_BINARY_DIR}/include/colin/val  &&
+  ln -s ${CMAKE_CURRENT_BINARY_DIR}/external/src/npg/src/colin/VALfiles/parsing/
+  ${CMAKE_CURRENT_BINARY_DIR}/include/colin/val/parsing
 )
-set(EXTRA_LIBS ColinCommon ${EXTRA_LIBS})
+
+
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/colin)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/colin/val)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/colin/val/parsing)
+set(EXTRA_LIBS ${EXTRA_LIBS} colin Inst ParsePDDL )
+
+add_dependencies(NPG CLP)
+add_dependencies(NPG CGL)
+add_dependencies(NPG CBC)
+add_dependencies(CBC CGL)
+add_dependencies(CBC CLP)
+
 endif(WITH_COLIN)
 
 ################################################################
@@ -479,14 +501,8 @@ else()
 endif()
 
 if(WITH_COLIN)
-add_dependencies(npg CLP)
-add_dependencies(npg CGL)
-add_dependencies(npg CBC)
-add_dependencies(CBC CGL)
-add_dependencies(CBC CLP)
-endif(WITH_COLIN)
-
-
+add_dependencies(dreal NPG)
+endif()
 
 add_dependencies(dreal IBEX)
 add_dependencies(dreal GLOG)
@@ -503,7 +519,6 @@ add_executable(dReal-bin main.cpp)
 SET_TARGET_PROPERTIES(dReal-bin
   PROPERTIES OUTPUT_NAME dReal)
 target_link_libraries(dReal-bin dreal ${EXTRA_LIBS})
-
 
 #add tests
 add_subdirectory(tests/util)

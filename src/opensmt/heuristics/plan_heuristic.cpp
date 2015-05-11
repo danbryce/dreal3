@@ -604,7 +604,7 @@ bool plan_heuristic::expand_path() {
 	  break;
 	}	
       }
-      if(!found_existing_value){
+      if(!found_existing_value){   
 	double before_decision_value = 0;
 	double after_decision_value = 0;
 #ifdef WITH_COLIN

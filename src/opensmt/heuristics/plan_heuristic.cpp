@@ -20,6 +20,9 @@ You should have received a copy of the GNU General Public License
 along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -39,6 +42,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "colin/globals.h"
 #include "colin/lpscheduler.h"
 #include "colin/numericanalysis.h"
+#include "dsolvers/nra_solver.h"
 #endif
 
 using std::string;
@@ -113,8 +117,17 @@ namespace dreal {
           en = new map< string, Enode* >();
           time_fact_enodes.push_back(en);
 
+	  en = new map< string, Enode* >();
+	  time_fact_sub_enodes.push_back(en);
+
           en = new map< string, Enode* >();
           time_func_enodes.push_back(en);
+
+#ifdef WITH_COLIN
+	  stepLiteralToEnode.push_back(new map<Literal*, Enode*>());
+	  pneAtTime.push_back(new map<int, string>());
+#endif
+	  
         }
 
         time_enodes.assign(static_cast<int>(m_depth+1), NULL);
@@ -126,7 +139,10 @@ namespace dreal {
 	// first_decision->push_back(true);
 	// first_decision->push_back(false);
 	// m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
+	
 
+
+	
 #ifdef WITH_COLIN
 	Planner::FF::steepestDescent = false;
     Planner::FF::incrementalExpansion = false;
@@ -195,6 +211,41 @@ namespace dreal {
     }
 
 
+    vector<Literal*>* literals = Planner::RPGBuilder::getLiterals();
+    for(int j = 0; j < literals->size(); j++){
+	  Literal* lit = (*literals)[j];
+	  stringstream ss;
+	  lit->write(ss);
+	  string lit_str = ss.str();
+	  
+	  str_replace(lit_str, "-", "_");
+	  str_replace(lit_str, " ", "_");
+	  str_replace(lit_str, "(", "");
+	  str_replace(lit_str, ")", "");
+	  //	  lit_str = "fact_" + lit_str;
+	  DREAL_LOG_DEBUG << "Got lit " << lit_str;
+	  colinLiterals[lit_str] = lit;
+	  //	  DREAL_LOG_DEBUG << "Is lit? " << lit_str;
+    }
+    
+    for( int p = 0; p < Planner::RPGBuilder::getPNECount(); p++){
+      for(int t = 0; t < m_depth; t++){
+      PNE *my_pne = Planner::RPGBuilder::getPNE(p);
+      stringstream ss;
+      
+      my_pne->write(ss);
+      string lit_str = ss.str();
+      str_replace(lit_str, "-", "_");
+      str_replace(lit_str, " ", "_");
+      str_replace(lit_str, "(", "");
+      str_replace(lit_str, ")", "");
+      stringstream fs;
+      fs << "func_" << lit_str << "_" << t << "_t";
+      (*pneAtTime[t])[p] = fs.str();
+      }
+    }
+
+    
     bool reachesGoals;
     
     Planner::FF::getMyHeuristic(reachesGoals);
@@ -295,7 +346,7 @@ void plan_heuristic::inform(Enode * e) {
         int spos = var.find_first_of("_")+1;
         int epos = var.find_last_of("_");
         string fact = var.substr(spos, epos-spos).c_str();
-
+	
         //  for (auto const & c : consts) {
         //    stringstream css;
         //    css << c;
@@ -303,6 +354,10 @@ void plan_heuristic::inform(Enode * e) {
         //    if (cs == 1){
             DREAL_LOG_INFO << "fact = " << fact << " time = " << time << endl;
             (*time_fact_enodes[time])[fact] = e;
+#ifdef WITH_COLIN
+	    enodeToLiteral[e] = colinLiterals[fact];
+	    (*stepLiteralToEnode[time])[enodeToLiteral[e]] = e;
+#endif
             //duract_enodes.insert(e);
 	    //int choice = getChoiceIndex(e);
 	    //DREAL_LOG_INFO << "index = " << choice;
@@ -592,19 +647,22 @@ bool plan_heuristic::expand_path() {
       bool found_existing_value = false;
 
       if (current_enode != NULL) { 
-	DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
       
 
 	//      vector<bool> current_decision_copy (current_decision->begin(), current_decision->end());
         // prune out choices that are negated in m_stack
       for (auto e : m_stack) {
 	if(e->first == current_enode){
+	  DREAL_LOG_INFO << "Found decision at happening " << time << " " << current_enode;
+		
 	  current_decision->push_back(e->second);
 	  found_existing_value = true;
 	  break;
 	}	
       }
-      if(!found_existing_value){   
+      if(!found_existing_value){
+	DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
+
 	double before_decision_value = 0;
 	double after_decision_value = 0;
 #ifdef WITH_COLIN
@@ -959,20 +1017,103 @@ bool plan_heuristic::unwind_path() {
 #ifdef WITH_COLIN
  
   void plan_heuristic::getBooleansAtTime(int time, Planner::LiteralSet& booleans){
+    //    DREAL_LOG_DEBUG << "get Bools at " << time;
     map<string, Enode*> *facts_at_time = time_fact_enodes[time];
     for(map<string, Enode*>::iterator i = facts_at_time->begin(); i != facts_at_time->end(); i++){
       DREAL_LOG_DEBUG << (*i).second;
       if(stack_literals.find((*i).second) != stack_literals.end()){
-	DREAL_LOG_DEBUG << "assn";
+	//	DREAL_LOG_DEBUG << "assn";
+	booleans.insert(enodeToLiteral[(*i).second]);
+	DREAL_LOG_DEBUG << (*i).second;
       }
-// if((*i).second->getDecPolarity() == l_True){
-      // 	DREAL_LOG_DEBUG << "true";
-      // } else if((*i).second->getDecPolarity() == l_False){
-      // 	DREAL_LOG_DEBUG << "false";
-      // } else {
-      // 	DREAL_LOG_DEBUG << "unk";
-      // }
     }
+
+
+    if(first_state_lookup){ //cannot do this in initialize because substitutions are not yet present
+      first_state_lookup = false;
+      	const vector< Pair (Enode *) > substitutions = m_egraph->getSubstitutions();
+	for(auto p : substitutions){
+	  if (p.second->isTrue()) {
+	    unordered_set<Enode *> const & vars = p.first->get_vars();
+	    for (auto const & v : vars) {
+	      stringstream ss;
+	      ss << v;
+	      string var = ss.str();
+	      if (var.find("fact") == 0) {
+		int time = atoi(var.substr(var.find_last_of("_")+1).c_str());
+		int spos = var.find_first_of("_")+1;
+		int epos = var.find_last_of("_");
+		string fact = var.substr(spos, epos-spos).c_str();		
+		//DREAL_LOG_INFO << "subfact = " << fact << " time = " << time << endl;
+		enodeToLiteral[p.first] = colinLiterals[fact];
+		(*stepLiteralToEnode[time])[enodeToLiteral[p.first]] = p.first;
+
+		(*time_fact_sub_enodes[time])[fact] = p.first;
+	      }
+	    }
+	  }
+	}
+    }
+
+    facts_at_time = time_fact_sub_enodes[time];
+    for(map<string, Enode*>::iterator i = facts_at_time->begin(); i != facts_at_time->end(); i++){
+      DREAL_LOG_DEBUG << (*i).second;
+      booleans.insert(enodeToLiteral[(*i).second]);
+    }
+  }
+
+  void plan_heuristic::getRealsAtTime(int time, vector<double>& reals){
+    for( auto t : m_egraph->getTSolvers()){
+        dreal::nra_solver* nra = dynamic_cast<dreal::nra_solver*>(t);
+        if(nra){
+	  box b = nra->getBox();
+
+	  
+	  int p = 0;
+	  
+	  for( int p = 0; p < Planner::RPGBuilder::getPNECount(); p++){
+	    string pne_str = (*pneAtTime[time])[p];
+	    
+	    // PNE *my_pne = Planner::RPGBuilder::getPNE(p);
+	    // stringstream ss;
+	    // ss << "func_";
+	    // my_pne->write(ss);
+	    // ss << "_" << time << "_t";
+	    // DREAL_LOG_DEBUG << "lookup " << ss.str();
+	    int lit = b.get_index(pne_str);
+	    ibex::Interval interval = b.get_values()[lit];
+	    DREAL_LOG_DEBUG << pne_str << " = " << interval;
+	    //	    DREAL_LOG_DEBUG << pne_str << " = " << interval.lb();
+	    //	    DREAL_LOG_DEBUG << reals.size();
+	    reals[p] = interval.lb();
+	  }
+	  //DREAL_LOG_DEBUG << "done reals";
+	  
+	  // map<string, Enode*> *facts_at_time = time_func_enodes[time];
+	  // for(map<string, Enode*>::iterator i = facts_at_time->begin(); i != facts_at_time->end(); i++){
+	  //   DREAL_LOG_DEBUG << (*i).second;
+	    
+	  // }
+	  
+	  break;
+        }
+      }
+
+    
+//     map<string, Enode*> *facts_at_time = time_func_enodes[time];
+//     for(map<string, Enode*>::iterator i = facts_at_time->begin(); i != facts_at_time->end(); i++){
+//       DREAL_LOG_DEBUG << (*i).second;
+//       if(stack_literals.find((*i).second) != stack_literals.end()){
+// 	DREAL_LOG_DEBUG << "assn";
+//       }
+// // if((*i).second->getDecPolarity() == l_True){
+//       // 	DREAL_LOG_DEBUG << "true";
+//       // } else if((*i).second->getDecPolarity() == l_False){
+//       // 	DREAL_LOG_DEBUG << "false";
+//       // } else {
+//       // 	DREAL_LOG_DEBUG << "unk";
+//       // }
+//     }
 
   }
 
@@ -983,8 +1124,8 @@ bool plan_heuristic::unwind_path() {
     int time =  ((static_cast<int>(m_decision_stack.size()))/
 		 num_choices_per_happening)+1;
     getBooleansAtTime(time-1, booleans);
+    getRealsAtTime(time-1, reals);
 
-    
 
 
 
@@ -995,6 +1136,7 @@ bool plan_heuristic::unwind_path() {
 
     my_state->getEditableInnerState().setFacts(reals);
     my_state->getEditableInnerState().setFacts(booleans);
+
        
     for(auto l : booleans){
       l->write(cout); cout<< endl;
@@ -1007,6 +1149,7 @@ bool plan_heuristic::unwind_path() {
 
     DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() end"; 
     return my_state;
+    
   }
 
    
@@ -1017,7 +1160,8 @@ bool plan_heuristic::unwind_path() {
     //bool reachesGoals; 
     //Planner::FF::getMyHeuristic(reachesGoals);   
     //SearchQueueItem * const initialSQI; 
-    vector<double> reals; 
+    vector<double> reals;
+    reals.assign(Planner::RPGBuilder::getPNECount(), 0);
     Planner::LiteralSet booleans;    
     Planner::ExtendedMinimalState *state = populateStateFromStack(reals,booleans);
     auto_ptr<Planner::SearchQueueItem> node = auto_ptr<Planner::SearchQueueItem>(new Planner::SearchQueueItem(state, false));

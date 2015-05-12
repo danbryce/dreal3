@@ -70,6 +70,7 @@ public:
     bool  check(bool c);
     bool  belongsToT(Enode * e);
     void  computeModel();
+    box   getBox() { return m_box; }
 
 private:
     // std::unordered_map<std::string, ibex::Variable const> m_var_map;

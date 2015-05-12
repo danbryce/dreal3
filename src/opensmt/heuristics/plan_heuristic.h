@@ -38,7 +38,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 namespace dreal {
 class plan_heuristic : public heuristic {
 public:
- plan_heuristic() : heuristic(), choice_index(0), first_path(true) {}
+ plan_heuristic() : heuristic(), choice_index(0), first_path(true), first_state_lookup(true) {}
     void initialize(SMTConfig &, Egraph &, THandler* thandler, vec<Lit> *trail, vec<int> *trail_lim);
     ~plan_heuristic() {
       for (auto t : time_process_enodes)
@@ -64,9 +64,25 @@ private:
 
     
 #ifdef WITH_COLIN
+    void str_replace(string &s, const string &search, const string &replace){
+      for (size_t pos = 0; ; pos += replace.length()){
+          pos = s.find(search, pos);
+         if (pos == string::npos) break;
+
+         s.erase(pos, search.length());
+         s.insert(pos, replace);
+     }
+}
+    
     Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluents,Planner::LiteralSet& tinitialState);  
     int getColinHeuristic(int choice);
     void getBooleansAtTime(int time, Planner::LiteralSet& booleans);
+    void getRealsAtTime(int time, vector<double>& reals);
+
+    map<string, Literal*> colinLiterals;
+    map<Enode*, Literal*> enodeToLiteral;
+    vector<map<Literal*, Enode*>*> stepLiteralToEnode;
+    vector<map<int, string>*> pneAtTime;
 #endif    
     
 
@@ -89,6 +105,7 @@ private:
     int num_choices_per_happening;
     int choice_index;
     bool first_path;
+    bool first_state_lookup;
 
     //     map< Enode *, pair<int, int>* > process_literals;
     vector< map<string, Enode* >* > time_process_enodes;
@@ -96,6 +113,7 @@ private:
     vector< map<string, Enode* >* > time_act_enodes;
     vector< map<string, Enode* >* > time_duract_enodes;
     vector< map<string, Enode* >* > time_fact_enodes;
+    vector< map<string, Enode* >* > time_fact_sub_enodes;
     vector< map<string, Enode* >* > time_func_enodes;
     vector<Enode*> choices;
     map<Enode*, int> choice_indices;

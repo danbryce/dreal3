@@ -155,15 +155,18 @@ void CoreSMTSolver::printCurrentAssignment( ostream & out, bool  )
 {
     for (Var v = 2; v < nVars(); v++)
       {
+	int tmp1, tmp2;
 	Enode * e = theory_handler->varToEnode( v );
-	if(e && !e->isTLit() && //model != NULL && model.size() >= v &&
-	   !e->isSymb()
-	   ){
+	if( sscanf( (e->getCar( )->getName( )).c_str( ), CNF_STR, &tmp1, &tmp2 ) == 0  &&
+	    e && !e->isTLit() && model != NULL && model.size() >= v &&
+	    !e->isSymb()){
 	  
-	  out << std::setw(40) << e << " : " << (assigns[v] == toInt(l_True) ? "T" : (assigns[v] == toInt(l_False) ? "F" : "U"))  << endl;      
+	  out << std::setw(40) << e << " : " << (model[v] == l_True ? "T" : (model[v] == l_False ? "F" : "U")) << endl;
+	 
+	} else if(e && !e->isTLit() && !e->isSymb() && sscanf( (e->getCar( )->getName( )).c_str( ), CNF_STR, &tmp1, &tmp2 ) == 0) {
+	   out << std::setw(40) << e << " : " << (assigns[v] == toInt(l_True) ? "T" : (assigns[v] == toInt(l_False) ? "F" : "U")) << " " << endl;      
 	}
       }
- 
   const vector< Pair (Enode *) > substitutions = egraph.getSubstitutions();
   for(auto p : substitutions){
     if (p.second->isTrue()) {

@@ -1138,14 +1138,14 @@ bool plan_heuristic::unwind_path() {
     my_state->getEditableInnerState().setFacts(booleans);
 
        
-    for(auto l : booleans){
-      l->write(cout); cout<< endl;
-    }
-    int p = 0;
-    for(auto l : reals){
-      PNE *my_pne = Planner::RPGBuilder::getPNE(p++);
-      my_pne->write(cout); cout << " = " << l << endl;
-    }
+    // for(auto l : booleans){
+    //   l->write(cout); cout<< endl;
+    // }
+    // int p = 0;
+    // for(auto l : reals){
+    //   PNE *my_pne = Planner::RPGBuilder::getPNE(p++);
+    //   my_pne->write(cout); cout << " = " << l << endl;
+    // }
 
     DREAL_LOG_DEBUG << "plan_heuristic::populateStateFromStack() end"; 
     return my_state;

@@ -19,10 +19,12 @@ You should have received a copy of the GNU General Public License
 along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
+#include "dsolvers/nra_solver.h"
 #include <gflags/gflags.h>
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -32,7 +34,6 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <utility>
 #include <vector>
 #include "./config.h"
-#include "dsolvers/nra_solver.h"
 #include "ibex/ibex.h"
 #include "util/box.h"
 #include "util/constraint.h"
@@ -43,13 +44,14 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "json/json.hpp"
 
 using ibex::IntervalVector;
+using nlohmann::json;
 using std::boolalpha;
+using std::get;
 using std::logic_error;
+using std::numeric_limits;
 using std::pair;
 using std::stack;
 using std::vector;
-using std::get;
-using nlohmann::json;
 
 namespace dreal {
 using std::cout;
@@ -94,6 +96,9 @@ bool nra_solver::assertLit(Enode * e, bool reason) {
     DREAL_LOG_INFO << "nra_solver::assertLit: " << e
                    << ", reason: " << boolalpha << reason
                    << ", polarity: " << e->getPolarity().toInt()
+                   << ", deduced: " << e->isDeduced()
+                   << ", getDeduced: " << e->getDeduced().toInt()
+                   << ", getIndex: " << e->getDedIndex()
                    << ", level: " << m_stack.size()
                    << ", ded.size = " << deductions.size();
     (void)reason;
@@ -222,11 +227,25 @@ contractor nra_solver::build_contractor(box const & box, scoped_vec<constraint *
             return true;
         }
         double const threshold = 0.01;
-        double const new_volume = new_box.volume();
-        double const old_volume = old_box.volume();
-        if (old_volume == 0.0) return true;
-        double const improvement = 1.00 - (new_volume / old_volume);
-        return improvement < threshold;
+        // If there is a dimension which is improved more than
+        // threshold, we stop the current fixed-point computation.
+        for (unsigned i = 0; i < old_box.size(); i++) {
+            double const new_box_i = new_box[i].diam();
+            double const old_box_i = old_box[i].diam();
+            if (new_box_i == numeric_limits<double>::infinity()) {
+                continue;
+            }
+            if (old_box_i == 0) {
+                // The i-th dimension was already a point, nothing to improve.
+                continue;
+            }
+            double const improvement = 1 - new_box_i / old_box_i;
+            assert(!std::isnan(improvement));
+            if (improvement >= threshold) {
+                return false;
+            }
+        }
+        return true;
     };
     return mk_contractor_fixpoint(term_cond, nl_ctcs, ode_ctcs, nl_eval_ctcs);
 }
@@ -338,6 +357,7 @@ box icp_loop_with_nc_bt(box b, contractor const & ctc, SMTConfig & config) {
         if (!b.is_empty()) {
             // SAT
             if (b.max_diam() > config.nra_precision) {
+              config.inc_icp_decisions();
                 tuple<int, box, box> splits = b.bisect();
                 unsigned const index = get<0>(splits);
                 box const & first    = get<1>(splits);
@@ -415,12 +435,39 @@ void nra_solver::handle_sat_case(box const & b) const {
     return;
 }
 
+void nra_solver::handle_deduction() {
+    for (Enode * const l : m_lits) {
+        if (l->getPolarity() == l_Undef && !l->isDeduced()) {
+            auto it = m_ctr_map.find(make_pair(l, true));
+            if (it != m_ctr_map.end()) {
+                constraint * ctr = it->second;
+                nonlinear_constraint const * const nl_ctr = dynamic_cast<nonlinear_constraint *>(ctr);
+                if (nl_ctr) {
+                    pair<lbool, ibex::Interval> p = nl_ctr->eval(m_box);
+                    if (p.first == l_False) {
+                        // We know that this literal has to be false;
+                        l->setDeduced(l_False, id);
+                        deductions.push_back(l);
+                        DREAL_LOG_INFO << "Deduced: " << *nl_ctr << "\t" << p.first << "\t" << p.second;
+                    } else if (p.first == l_True) {
+                        // We know that this literal has to be true;
+                        l->setDeduced(l_True, id);
+                        deductions.push_back(l);
+                        DREAL_LOG_INFO << "Deduced: " << *nl_ctr << "\t" << p.first << "\t" << p.second;
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Check for consistency.
 // If flag is set make sure you run a complete check
 bool nra_solver::check(bool complete) {
     if (config.nra_stat) { m_stat.increase_check(complete); }
     if (m_stack.size() == 0) { return true; }
-    DREAL_LOG_INFO << "nra_solver::check(complete = " << boolalpha << complete << ")";
+    DREAL_LOG_INFO << "nra_solver::check(complete = " << boolalpha << complete << ")"
+                   << "stack size = " << m_stack.size();
     double const prec = config.nra_precision;
     m_ctc = build_contractor(m_box, m_stack, complete);
     try {
@@ -438,8 +485,13 @@ bool nra_solver::check(bool complete) {
     }
     if (!result) {
         explanation = generate_explanation(m_used_constraint_vec);
-    } else if (complete) {
-        handle_sat_case(m_box);
+    } else {
+        if (!complete && config.sat_theory_propagation) {
+            handle_deduction();
+        }
+        if (complete) {
+            handle_sat_case(m_box);
+        }
     }
     DREAL_LOG_DEBUG << "nra_solver::check(" << (complete ? "complete" : "incomplete") << ") = " << result;
     return result;
@@ -457,6 +509,9 @@ vector<Enode *> nra_solver::generate_explanation(scoped_vec<constraint const *> 
     }
     vector<Enode *> exps;
     copy(bag.begin(), bag.end(), back_inserter(exps));
+    std::sort(exps.begin(), exps.end(), [](Enode const * const e1, Enode const * const e2) {
+            return e1->getId() < e2->getId();
+        });
     return exps;
 }
 

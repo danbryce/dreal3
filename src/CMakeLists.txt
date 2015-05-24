@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 project(DREAL C CXX)
 set(DREAL_VERSION_MAJOR 3)
 set(DREAL_VERSION_MINOR 15)
-set(DREAL_VERSION_PATCH 04.2)
+set(DREAL_VERSION_PATCH 05)
 set(PACKAGE_NAME dReal)
 set(PACKAGE_VERSION "${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}")
 set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
@@ -21,10 +21,30 @@ include(CTest)
 # Added for External Projects
 include(ExternalProject)
 
-#set(DREAL_EXTRA_LINKER_FLAGS "-D__USE_FILIB__")
-#set(DREAL_EXTRA_CXX_FLAGS "-D__USE_FILIB__")
-set(DREAL_EXTRA_LINKER_FLAGS "")
-set(DREAL_EXTRA_CXX_FLAGS "")
+################################################################
+# CXX Flags
+################################################################
+set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -mfpmath=sse -msse -msse2")
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -ffloat-store -frounding-math")
+elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+  message(WARNING "Clang does not support -ffloat-store and -frounding-math options "
+    "which are required to guarantee the correctness of the interval arithmetic.")
+else()
+  message(WARNING "We added compiler flags -ffloat-store and -frounding-math, "
+    "but it is possible that your compiler do not support the options. "
+    "If that is the case, please contact Soonho Kong <soonhok@cs.cmu.edu>.")
+  set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -ffloat-store -frounding-math")
+endif()
+
+################################################################
+# Initialize CXXFLAGS.
+################################################################
+set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11 ${DREAL_EXTRA_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG          "-g -DDREAL_DEBUG -DDREAL_TRACE -fno-inline")
+set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
 ################################################################
 # Set Module Path
@@ -37,8 +57,14 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 if(BUILD_STATIC_BIN)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     message(STATUS "Static linking of user binaries is not supported on Mac OS X. See https://developer.apple.com/library/mac/qa/qa1118/_index.html")
-    set(DREAL_EXTRA_LINKER_FLAGS "${DREAL_EXE_EXTRA_LINKER_FLAGS} -static-libgcc -static-libstdc++")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+    if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+      set(DREAL_EXTRA_LINKER_FLAGS "${DREAL_EXE_EXTRA_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+      # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+    endif()
+    if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+      set(DREAL_EXTRA_LINKER_FLAGS "${DREAL_EXE_EXTRA_LINKER_FLAGS} -static-libstdc++")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ ")
+    endif()
   else()
     set(DREAL_EXTRA_LINKER_FLAGS "${DREAL_EXTRA_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
     #  set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -static -static-libgcc -static-libstdc++")
@@ -79,15 +105,6 @@ else()
   set(SHARED_LIB_IBEX_COMMAND   "")
   set(SHARED_LIB_CMAKE_COMMAND  "-DBUILD_SHARED_LIBS=OFF")
 endif()
-
-################################################################
-# Initialize CXXFLAGS.
-################################################################
-set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11 ${DREAL_EXTRA_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG          "-g -DDREAL_DEBUG -DDREAL_TRACE -fno-inline")
-set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
 ################################################################
 # Test coverage
@@ -329,15 +346,6 @@ set(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/ibex)
 set(EXTERNAL_LD_FLAGS "-L${CMAKE_CURRENT_BINARY_DIR}/lib")
-
-################################################################
-# CXX Flags
-################################################################
-set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -mfpmath=sse -msse -msse2 -ffloat-store")
-
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set(DREAL_EXTRA_CXX_FLAGS "${DREAL_EXTRA_CXX_FLAGS} -frounding-math")
-endif()
 
 ################################################################
 # EGLIBC (Optional)

@@ -58,7 +58,7 @@ IF(NOT CMAKE_COMPILER_IS_GNUCXX)
         ENDIF()
 ENDIF() # NOT CMAKE_COMPILER_IS_GNUCXX
 
-IF ( NOT CMAKE_BUILD_TYPE STREQUAL "Debug" )
+IF ( NOT ((CMAKE_BUILD_TYPE STREQUAL "Debug" ) OR (CMAKE_BUILD_TYPE STREQUAL "DEBUG")) )
   MESSAGE( WARNING "Code coverage results with an optimized (non-Debug) build may be misleading" )
 ENDIF() # NOT CMAKE_BUILD_TYPE STREQUAL "Debug"
 
@@ -89,7 +89,7 @@ FUNCTION(SETUP_TARGET_FOR_COVERAGE _targetname _testrunner _outputname)
                 # COMMAND ${_testrunner} ${ARGV3}
                 # Capturing lcov counters and generating report
                 COMMAND ${LCOV_PATH} --directory . --capture --output-file ${_outputname}.info
-                COMMAND ${LCOV_PATH} --remove ${_outputname}.info '/usr/*' 'tests/*' 'realpaver/*' 'opensmt/*' 'cmake/*' 'include/*'  --output-file ${_outputname}.info.cleaned
+                COMMAND ${LCOV_PATH} --remove ${_outputname}.info '/usr/*' 'tests/*' 'opensmt/*' 'cmake/*' 'include/*'  --output-file ${_outputname}.info.cleaned
                 COMMAND ${GENHTML_PATH} -o ${_outputname} ${_outputname}.info.cleaned
                 COMMAND ${CMAKE_COMMAND} -E remove ${_outputname}.info
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

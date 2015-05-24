@@ -32,10 +32,6 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "util/string.h"
 #include "dsolvers/nra_solver.h"
 
-#ifndef __clang__
-#pragma STDC FENV_ACCESS ON
-#endif
-
 using std::unordered_map;
 
 namespace opensmt {
@@ -820,9 +816,12 @@ void OpenSMTContext::PrintResult( const lbool & result, const lbool & config_sta
     if (config.produce_stats){
       for( auto t : getEgraphP()->getTSolvers()){
         dreal::nra_solver* nra = dynamic_cast<dreal::nra_solver*>(t);
-        if(nra){
-          //out << "nodes: " << solver.decisions << " " << nra->decisions() << endl;
-          break;
+        if(nra && config.nra_output_num_nodes){
+          out << "nodes: " << solver.decisions  << " " << config.icp_decisions()
+              << endl;
+        }
+        if(nra && config.nra_model){
+          solver.printCurrentAssignment(config.nra_model_out, true);
         }
       }
     }

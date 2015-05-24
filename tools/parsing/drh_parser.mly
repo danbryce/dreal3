@@ -158,7 +158,7 @@ exp:
  | exp SLASH exp          { Basic.Div ($1, $3) }
  | exp CARET exp          { Basic.Pow ($1, $3) }
  | SQRT LP exp RP         { Basic.Sqrt $3 }
- | ABS LP exp RP          { Basic.Abs $3 }
+ | ABS LP exp RP         { Basic.Abs $3 }
  | LOG  LP exp RP         { Basic.Log  $3 }
  | EXP  LP exp RP         { Basic.Exp  $3 }
  | SIN  LP exp RP         { Basic.Sin  $3 }

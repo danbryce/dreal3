@@ -31,6 +31,10 @@ DEFINE_double(precision,          0.0, "precision");
 DEFINE_bool  (delta,            false, "use delta");
 DEFINE_bool  (delta_heuristic,  false, "delta heuristic");
 DEFINE_string(bmc_heuristic,       "", "bmc heuristic");
+DEFINE_string(plan_heuristic,      "", "plan heuristic");
+DEFINE_string(plan_domain,         "", "plan domain");
+DEFINE_string(plan_problem,        "", "plan problem");
+DEFINE_bool(output_num_nodes,   false, "ouput num nodes");
 DEFINE_bool  (short_sat,        false, "short sat");
 DEFINE_double(ode_step,           0.0, "ode step");
 DEFINE_uint64(ode_order,           20, "ode order");
@@ -41,6 +45,7 @@ DEFINE_bool  (ode_forward_only, false, "ode forward only");
 DEFINE_bool  (ode_parallel,     false, "ode parallel");
 DEFINE_bool  (proof,            false, "proof");
 DEFINE_bool  (readable_proof,   false, "readable proof");
+DEFINE_bool  (theory_propagation, false, "use theory propagation / deduction");
 DEFINE_bool  (model,            false, "model");
 DEFINE_bool  (visualize,        false, "visualize");
 DEFINE_bool  (verbose,          false, "verbose");
@@ -138,6 +143,7 @@ SMTConfig::initializeConfig( )
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
+  nra_output_num_nodes         = false;
 }
 
 void SMTConfig::parseConfig ( char * f )
@@ -364,6 +370,10 @@ SMTConfig::parseCMDLine( int /* argc */
   nra_delta_test          = FLAGS_delta;
   nra_use_delta_heuristic = FLAGS_delta_heuristic;
   nra_short_sat           = FLAGS_short_sat;
+  nra_plan_heuristic      = FLAGS_plan_heuristic;
+  nra_plan_domain         = FLAGS_plan_domain;
+  nra_plan_problem        = FLAGS_plan_problem;
+  nra_output_num_nodes    = FLAGS_output_num_nodes;
   nra_bmc_heuristic       = FLAGS_bmc_heuristic;
   nra_ODE_step            = FLAGS_ode_step;
   nra_ODE_taylor_order    = FLAGS_ode_order;
@@ -373,6 +383,7 @@ SMTConfig::parseCMDLine( int /* argc */
   nra_ODE_forward_only    = FLAGS_ode_forward_only;
   nra_ODE_parallel        = FLAGS_ode_parallel;
   nra_readable_proof      = FLAGS_readable_proof;
+  sat_theory_propagation  = FLAGS_theory_propagation;
   nra_proof               = nra_readable_proof || FLAGS_proof;
   nra_model               = FLAGS_model;
   nra_json                = FLAGS_visualize;
@@ -404,6 +415,9 @@ SMTConfig::parseCMDLine( int /* argc */
           cout << "Cannot create a file: " << filename << endl;
           exit( 1 );
       }
+  }
+  if (nra_verbose || nra_debug) {
+      verbosity = 10;
   }
   FLAGS_log_prefix = 0;
   FLAGS_logtostderr = 1;

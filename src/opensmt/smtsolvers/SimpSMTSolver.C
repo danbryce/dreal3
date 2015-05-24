@@ -38,7 +38,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "minisat/mtl/Sort.h"
 #include "smtsolvers/SimpSMTSolver.h"
-
+#include "util/logging.h"
 //=================================================================================================
 // Constructor/Destructor:
 
@@ -135,6 +135,8 @@ void SimpSMTSolver::initialize( )
   addClause( clauseFalse );
 
   theory_handler = new THandler( egraph, config, *this, trail, level, assigns, var_True, var_False );
+
+  heuristic->initialize(config, egraph, theory_handler, &trail, &trail_lim);
 }
 
 Var SimpSMTSolver::newVar(bool sign, bool dvar)
@@ -311,6 +313,18 @@ skip_theory_preproc:
       }
     }
 
+    if (config.nra_multiple_soln > 1) {
+      // we temporary freeze literals that correspond to theory atoms
+      for (int v = 2; v < CoreSMTSolver::nVars(); v++) {
+        Enode * e = theory_handler->varToEnode(v);
+        if (!e->isTAtom()) {
+          continue;
+        }
+        // Freeze and store.
+        setFrozen(v, true);
+        extra_frozen.push(v);
+      }
+    }
     result = eliminate(turn_off_simp);
   }
 
@@ -319,11 +333,39 @@ skip_theory_preproc:
 #endif
 
   lbool lresult = l_Undef;
-  if (result)
-    lresult = CoreSMTSolver::solve(assumps, conflicts);
-  else
-    lresult = l_False;
+  if (result) {
+    if (!(config.nra_multiple_soln > 1)) {
+      //
+      // Satisfiability check
+      //
+      lresult = CoreSMTSolver::solve(assumps, conflicts);
+    } else {
+      //
+      // Enumerate solutions
+      //
+      vec<Lit> blocking_clause;
+      uint64_t num_models = 0;
+      while ((CoreSMTSolver::solve(assumps) != l_False) && (config.nra_found_soln <= config.nra_multiple_soln)){
+        // Create a blocking clause from the current model to rule out this solution
+        blocking_clause.clear();
+        for (int v = 2; v < CoreSMTSolver::nVars(); v++) {
+          // we block a conjunction of assigned literals
+          if (CoreSMTSolver::modelValue(v) != l_Undef) {
+            blocking_clause.push(Lit(v, CoreSMTSolver::modelValue(v) == l_True));
+          }
+        }
+        if (!CoreSMTSolver::addClause(blocking_clause)) {
+          lresult = l_False;
+          break;
+        }
+        num_models++;
+      }
+      lresult = l_False;
+    }
 
+  } else {
+    lresult = l_False;
+  }
   if (lresult == l_True)
   {
     extendModel();
@@ -336,8 +378,9 @@ skip_theory_preproc:
 
   if (do_simp)
     // Unfreeze the assumptions that were frozen:
-    for (int i = 0; i < extra_frozen.size(); i++)
+    for (int i = 0; i < extra_frozen.size(); i++) {
       setFrozen(extra_frozen[i], false);
+    }
 
   return lresult;
 }
@@ -498,7 +541,7 @@ bool SimpSMTSolver::addSMTClause( vector< Enode * > & smt_clause, uint64_t in )
     // Just add the literal
     //
     Lit l = theory_handler->enodeToLit( e );
-
+    heuristic->inform(e);    
 #if NEW_SIMPLIFICATIONS
     if ( e->isTAtom( ) )
     {
@@ -928,6 +971,31 @@ bool SimpSMTSolver::asymmVar(Var v)
     return backwardSubsumptionCheck();
 }
 
+
+void SimpSMTSolver::filterUnassigned()
+{
+  if (config.nra_short_sat) {
+    // order_heap.filter(ShortSatVarFilter(*this));
+    for (int i = 2; i < nVars(); i++)
+      {
+        if (order_heap.inHeap(i) && toLbool(assigns[i]) == l_Undef){
+          const vec<Clause*>& clauses = occurs[i];
+          bool isInUnsat = false;
+          for (int c = 0; c < clauses.size(); c++) {
+            if (!satisfied(*clauses[c])) {
+              isInUnsat = true;
+              break;
+            }
+          }
+          if(!isInUnsat){
+            DREAL_LOG_DEBUG << "SimpSMTSolver::filterUnassigned() " << theory_handler->varToEnode(i) << " is not a required decision var";
+            activity[i] -= 10;
+            order_heap.update(i);
+          }
+        }
+      }
+  }
+}
 
 void SimpSMTSolver::verifyModel()
 {

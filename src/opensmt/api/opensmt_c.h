@@ -72,15 +72,16 @@ void             opensmt_print_interpolant         ( opensmt_context, const char
 
 opensmt_expr     opensmt_mk_true                   ( opensmt_context );
 opensmt_expr     opensmt_mk_false                  ( opensmt_context );
-opensmt_expr     opensmt_mk_bool_var               ( opensmt_context, char * );
-opensmt_expr     opensmt_mk_int_var                ( opensmt_context, char * , long , long );
-opensmt_expr     opensmt_mk_real_var               ( opensmt_context, char * , double, double );
+opensmt_expr     opensmt_mk_bool_var               ( opensmt_context, char const * );
+opensmt_expr     opensmt_mk_int_var                ( opensmt_context, char const * , long , long );
+opensmt_expr     opensmt_mk_real_var               ( opensmt_context, char const * , double, double );
 opensmt_expr     opensmt_mk_or                     ( opensmt_context, opensmt_expr *, unsigned );
 opensmt_expr     opensmt_mk_and                    ( opensmt_context, opensmt_expr *, unsigned );
 opensmt_expr     opensmt_mk_eq                     ( opensmt_context, opensmt_expr, opensmt_expr );
 opensmt_expr     opensmt_mk_ite                    ( opensmt_context, opensmt_expr, opensmt_expr, opensmt_expr );
 opensmt_expr     opensmt_mk_not                    ( opensmt_context, opensmt_expr );
 opensmt_expr     opensmt_mk_num_from_string        ( opensmt_context, const char * );
+opensmt_expr     opensmt_mk_num                    ( opensmt_context, double const );
 opensmt_expr     opensmt_mk_plus                   ( opensmt_context, opensmt_expr *, unsigned );
 opensmt_expr     opensmt_mk_minus                  ( opensmt_context, opensmt_expr, opensmt_expr );
 opensmt_expr     opensmt_mk_times                  ( opensmt_context, opensmt_expr *, unsigned );
@@ -93,7 +94,7 @@ opensmt_expr     opensmt_mk_geq                    ( opensmt_context, opensmt_ex
 opensmt_expr     opensmt_mk_abs                    ( opensmt_context, opensmt_expr);
 opensmt_expr     opensmt_mk_exp                    ( opensmt_context, opensmt_expr);
 opensmt_expr     opensmt_mk_log                    ( opensmt_context, opensmt_expr);
-opensmt_expr     opensmt_mk_pow                    ( opensmt_context, opensmt_expr);
+opensmt_expr     opensmt_mk_pow                    ( opensmt_context, opensmt_expr, opensmt_expr);
 opensmt_expr     opensmt_mk_sin                    ( opensmt_context, opensmt_expr);
 opensmt_expr     opensmt_mk_cos                    ( opensmt_context, opensmt_expr);
 opensmt_expr     opensmt_mk_tan                    ( opensmt_context, opensmt_expr);

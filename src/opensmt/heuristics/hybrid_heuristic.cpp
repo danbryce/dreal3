@@ -263,6 +263,10 @@ void hybrid_heuristic::inform(Enode * e){
     }
 
     DREAL_LOG_DEBUG << "hybrid_heuristic::backtrack()";
+
+    if( m_stack_lim.size() < (unsigned long)trail_lim->size())
+      return;
+
     for(auto a : m_suggestions){
       delete a;
     }
@@ -273,10 +277,12 @@ void hybrid_heuristic::inform(Enode * e){
     displayTrail();
     displayStack();
 
-    int bt_point = (trail_lim->size() ==  0 ? 0 : (m_stack_lim.size() == (unsigned long)trail_lim->size() ? m_stack.size() : m_stack_lim[trail_lim->size()]-1));
-    DREAL_LOG_DEBUG << "level = " << trail_lim->size() << " pt = " << bt_point;
 
-    while(m_stack_lim.size() != (unsigned long)trail_lim->size()) m_stack_lim.pop_back();
+    
+    int bt_point = (trail_lim->size() ==  0 ? m_stack.size() : (m_stack_lim.size() == (unsigned long)trail_lim->size() ? m_stack.size() : m_stack_lim[trail_lim->size()-1]));
+    DREAL_LOG_DEBUG << "stack size = " << m_stack_lim.size() << " level = " << trail_lim->size() << " pt = " << bt_point;
+
+    while(m_stack_lim.size() > (unsigned long)trail_lim->size()) m_stack_lim.pop_back();
 
     for (int i = m_stack.size(); i > bt_point; i--){
       std::pair<Enode *, bool> *s = m_stack.back();
@@ -302,6 +308,12 @@ bool hybrid_heuristic::expand_path(){
     if (m_decision_stack.size() == 0)
         return false;
 
+    // path already expanded by SAT solver, and already pushed on m_stack
+    if (m_stack.size() == (num_autom*(m_depth+1)))
+        return true;
+
+
+    
     int steps_to_add = (num_autom*(m_depth+1))-static_cast<int>(m_decision_stack.size());
     DREAL_LOG_INFO << "Adding #steps: " << steps_to_add << endl;
     for (int i = 0; i < steps_to_add; i++){
@@ -428,7 +440,7 @@ bool hybrid_heuristic::expand_path(){
         }
       }
     }
-
+    DREAL_LOG_DEBUG << "Done expand_path()";
     return static_cast<int>(m_decision_stack.size()) == num_autom*(m_depth + 1); // successfully found a full path
 }
 
@@ -591,11 +603,12 @@ bool hybrid_heuristic::unwind_path() {
   for (int j = static_cast<int>(path.size() - 1); j > -1; j--){
     DREAL_LOG_INFO << "Path (" << j << ") = " << path[j] << endl;
     int stack_index_for_path_index = static_cast<int>(path.size() - j - 1);
-    if (stack_index_for_path_index < static_cast<int>(m_decision_stack.size()))
+    if (stack_index_for_path_index < static_cast<int>(m_decision_stack.size())){
       DREAL_LOG_INFO << "Stack(" << stack_index_for_path_index << ") = a"
                      << (m_decision_stack[stack_index_for_path_index]->first+1)
                      << " m"
                      << m_decision_stack[stack_index_for_path_index]->second->back();
+    }
     else
       DREAL_LOG_INFO << "Stack(" << stack_index_for_path_index << ") = *";
 
@@ -703,9 +716,10 @@ bool hybrid_heuristic::unwind_path() {
   for (int j = static_cast<int>(path.size() - 1); j > -1; j--){
     DREAL_LOG_INFO << "Path (" << j << ") = " << path[j] << endl;
     int stack_index_for_path_index = static_cast<int>(path.size() - j - 1);
-    if (stack_index_for_path_index < static_cast<int>(m_decision_stack.size()))
+    if (stack_index_for_path_index < static_cast<int>(m_decision_stack.size())){
       DREAL_LOG_INFO << "Stack(" << stack_index_for_path_index << ") = "
                      << m_decision_stack[stack_index_for_path_index]->second->back();
+    }
     else {
       DREAL_LOG_INFO << "No choices left!";
     }
@@ -751,6 +765,9 @@ bool hybrid_heuristic::unwind_path() {
   void hybrid_heuristic::pushTrailOnStack(){
     DREAL_LOG_INFO << "hybrid_heuristic::pushTrailOnStack() lastTrailEnd = "
                    << lastTrailEnd << " trail->size() = " << trail->size();
+    displayTrail();
+    displayStack();
+
     if((unsigned int) trail_lim->size() >  m_stack_lim.size() ) //track start of levels after the first level
       m_stack_lim.push_back(m_stack.size());
     for (int i = lastTrailEnd; i < trail->size(); i++){
@@ -764,8 +781,9 @@ bool hybrid_heuristic::unwind_path() {
       }
     }
     lastTrailEnd = trail->size();
- displayStack();
-
+    displayTrail();
+    displayStack();
+    DREAL_LOG_INFO << "Pushed trail";
   }
 
 // unwind current current path to match stack
@@ -774,6 +792,7 @@ bool hybrid_heuristic::unwind_path() {
 void hybrid_heuristic::getSuggestions() {
   DREAL_LOG_INFO << "hybrid_heuristic::getSuggestions()";
   displayTrail();
+  displayStack();
   // if (m_suggestions.size() > 0){
   //   suggestions.assign(m_suggestions.begin(), m_suggestions.end());
   //   return;
@@ -808,6 +827,9 @@ void hybrid_heuristic::getSuggestions() {
   }
 
   if (m_decision_stack.size() == 0)
+    return;
+
+  if (m_stack.size() == (unsigned int)num_autom*(m_depth+1))
     return;
 
     // suggest default guesses at other literals
@@ -901,7 +923,7 @@ void hybrid_heuristic::getSuggestions() {
                 !s->isDeduced()){
               //s->setDecPolarity(l_False);
               m_suggestions.push_back(new pair<Enode*, bool>(s, false));
-              //DREAL_LOG_INFO << "Suggested Neg: " << s << endl;
+              DREAL_LOG_INFO << "Suggested Neg: " << s << endl;
             }
           }
         }
@@ -913,7 +935,7 @@ void hybrid_heuristic::getSuggestions() {
           !s->isDeduced()){
         //	s->setDecPolarity(l_True);
         m_suggestions.push_back(new pair<Enode*, bool>(s, true));
-        //DREAL_LOG_INFO << "Suggested Pos: " << s << endl;
+        DREAL_LOG_INFO << "Suggested Pos: " << s << endl;
       }
     }
   }

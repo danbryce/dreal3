@@ -93,6 +93,14 @@ let process_flow_pruned ~k ~q (varmap : Vardeclmap.t) (modemap:Modemap.t) (relev
   let m = Map.find q modemap in
   let mode_formula = make_mode_cond ~k ~q in
   let not_mode_formula = Basic.make_and(
+<<<<<<< HEAD
+                             List.map (fun nm -> if nm = q then
+                                               Basic.True
+                                             else
+                                               Basic.Not (make_mode_cond k nm)
+                                  )
+                                  (List.of_enum (Map.keys modemap))) in
+=======
 			     List.map (fun nm -> if nm = q then
 					       Basic.True
 					     else
@@ -105,6 +113,7 @@ let process_flow_pruned ~k ~q (varmap : Vardeclmap.t) (modemap:Modemap.t) (relev
 				      )
 				      | None -> (List.of_enum (Map.keys modemap)))
 			   ) in
+>>>>>>> b8bd95c... feat(heuristics): network heuristics working w/o labels, and added mode mutex constraint to encoding
   let time_var = (make_variable k "" "time") in
   let flow_formula =
     let vardecls = varmap_to_list varmap in
@@ -204,6 +213,15 @@ let process_jump_pruned (modemap : Modemap.t) (q : Mode.id) (next_q : Mode.id) (
   let jump = Map.find next_q jumpmap in
   let mode_formula = make_mode_cond ~k:(k+1) ~q:next_q in
   let not_mode_formula = Basic.make_and(
+<<<<<<< HEAD
+                             List.map (fun nm -> if nm = next_q then
+                                               Basic.True
+                                             else
+                                               Basic.Not (make_mode_cond (k+1) nm)
+                                  )
+                                  (List.of_enum (Map.keys modemap))) in
+  let gurad' = Basic.subst_formula (make_variable k "_t") jump.guard in
+=======
 			     List.map (fun nm -> if nm = next_q then
 					       Basic.True
 					     else
@@ -216,6 +234,7 @@ let process_jump_pruned (modemap : Modemap.t) (q : Mode.id) (next_q : Mode.id) (
 				       )
 				       | None -> (List.of_enum (Map.keys modemap)))) in
   let guard' = Basic.subst_formula (make_variable k "_t") jump.guard in
+>>>>>>> b8bd95c... feat(heuristics): network heuristics working w/o labels, and added mode mutex constraint to encoding
   let precision = Jump.precision jump in
   let used =
     Set.map
@@ -894,11 +913,16 @@ let pathgen (h : Network.t) (k : int) : comppath list =
   let flows = build_flow_annot_list h k in
   List.map (fun (g, odes) -> DefineODE ((make_variable g "" "flow"), odes)) flows*)
   
-let filter_aut_mode_distance aut k (filter: bool) = 
-	let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap aut)) in
-	match filter with
-		| true -> List.filter (fun m -> Mode.init_dist m <= k) modes
-		| false -> modes
+let filter_aut_mode_distance aut k (heuristic : Costmap.t list option) (i : int) =
+  let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap aut)) in
+  let reduced_modes =
+    match heuristic with
+      Some h -> List.filter (fun m -> (int_of_float (
+					   try Map.find (Mode.mode_id m) (List.nth h i)
+					   with e -> Printexc.print_backtrace IO.stderr; raise e)) <= k) modes
+    | None -> modes
+  in
+  reduced_modes
 
 let mk_variable k suffix (s: string) : string =
   let str_step = string_of_int k in
@@ -925,9 +949,9 @@ let mk_gamma_t k aut mode =
 let mk_sync k label = 
 	"sync_" ^ label ^ "_" ^ (string_of_int k)
 	
-let build_flow_annot_list_network (h: Network.t) k (filter: bool) = 
+let build_flow_annot_list_network (h: Network.t) k (heuristic : Costmap.t list option) = 
 	let auta = Network.automata h in
-	let b = List.map (fun a -> (a, filter_aut_mode_distance a k filter)) auta in
+	let b = List.mapi (fun i a -> (a, filter_aut_mode_distance a k heuristic i)) auta in
 	let d = List.map (fun (a, mlist)-> List.map (fun m -> (a, m, m.flows)) mlist) b in
 	List.flatten d
 	
@@ -945,8 +969,8 @@ let mk_flow_mul_gamma_s (o: Ode.t) k aut mode =
 	let (v, oexp) = o in
 	Basic.Mul [oexp; Basic.Var (mk_gamma k aut mode)]
 	
-let build_var_flow_list (n: Network.t) k (filter: bool) =
-	let flows = build_flow_annot_list_network n k filter in
+let build_var_flow_list (n: Network.t) k (heuristic : Costmap.t list option) =
+	let flows = build_flow_annot_list_network n k heuristic in
 	let gvars = Network.all_varnames_unique (Network.automata n) in
 	let fflows = List.flatten (List.map (fun (a, m, odes) -> List.map (fun ode -> (a, m, ode)) odes) flows) in
 	let vflows = List.map (fun v -> (v, List.filter (fun (a, m, (vi, _)) -> v = vi) fflows)) gvars in
@@ -957,21 +981,21 @@ let build_var_flow_list (n: Network.t) k (filter: bool) =
 			true -> (v, Basic.Add fl)
 			| false -> (v, List.hd fl)
 	) mul_flows in
-	let gamma_plain = List.flatten (List.map (
-		fun x -> List.map (
+	let gamma_plain = List.flatten (List.mapi (
+		fun i x -> List.map (
 			fun y -> (mk_gamma_nt x y, Basic.Num (0.0))
 		)
-		(filter_aut_mode_distance x k filter)
+		(filter_aut_mode_distance x k heuristic i)
 	) (Network.automata n)) in
 	let const_change_flows = List.map (fun (v, _) -> (v, Basic.Num (0.0))) empty_flows in
 	sum_flows@gamma_plain@const_change_flows
+			
+let compile_ode_definition (n: Network.t) k (heuristic : Costmap.t list option) =
+  let flows = List.map (fun x -> build_var_flow_list n x heuristic) (List.of_enum ( 0 -- k )) in
+  List.mapi (fun g odes -> DefineODE ((mk_variable g "" "flow"), odes)) flows
 	
-let compile_ode_definition (n: Network.t) k (filter: bool) = 
-	(* We require only one actual flow definition since it's basically a factorization of all flows *)
-	[(DefineODE ("flow_0", build_var_flow_list n k filter))]
-	
-let get_ode_var_map (n: Network.t) (k: int) (filter: bool) = 
-	let flowlist = build_flow_annot_list_network n k filter in
+let get_ode_var_map (n: Network.t) (k: int) (heuristic : Costmap.t list option) = 
+	let flowlist = build_flow_annot_list_network n k heuristic in
 	let steps = List.of_enum (0 -- (k-1)) in
 	List.fold_left 
 	(
@@ -987,9 +1011,9 @@ let get_ode_var_map (n: Network.t) (k: int) (filter: bool) =
 	Map.empty
 	flowlist
 
-let mk_flow (n: Network.t) i k (filter: bool) = 
-	let fl = build_var_flow_list n k filter in
-	let fvar = "flow_0" in
+let mk_flow (n: Network.t) i k (heuristic : Costmap.t list option) = 
+	let fl = build_var_flow_list n i heuristic in
+	let fvar = (mk_variable i "" "flow")  in
 	let timevar = mk_variable i "" "time" in
 	let vvars = List.map (fun (v, _) -> v) fl in
 	let varBegin = List.map (fun v -> mk_variable i "_0" v) vvars in
@@ -1015,17 +1039,17 @@ let mk_inv_q mode i =
 											conj_invs)
 			end
 			
-let mk_inv (n: Network.t) i k (filter: bool) = 
+let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) = 
 	let auta = Network.automata n in
-	let enf_mode_inv = List.map (fun a -> begin
-		let modes = filter_aut_mode_distance a k filter in
+	let enf_mode_inv = List.mapi (fun ia a -> begin
+		let modes = filter_aut_mode_distance a i heuristic ia in
 		List.map (fun m -> Basic.Imply (mk_cnd (mk_enforce i a) (Mode.mode_numId m), mk_inv_q m i)) modes
 	end) auta in
 	Basic.make_and (List.flatten enf_mode_inv)
 	
-let mk_maintain (n: Network.t) i k (filter: bool) = 
-	let flow = mk_flow n i k filter in
-	let inv = mk_inv n i k filter in
+let mk_maintain (n: Network.t) i k (heuristic : Costmap.t list option) = 
+	let flow = mk_flow n i k heuristic in
+	let inv = mk_inv n i k heuristic in
 	let time_var = mk_variable i "" "time" in
 	(*let forall_inv = Basic.ForallT (Basic.Num (float_of_int i),
 									Basic.Num 0.0,
@@ -1036,7 +1060,9 @@ let mk_maintain (n: Network.t) i k (filter: bool) =
 let mk_init aut = 
 	let modeId = Hybrid.init_id aut in
 	let modemap = Hybrid.modemap aut in
-	let mode = Map.find modeId modemap in
+	let mode = try Map.find modeId modemap
+		   with e -> Printexc.print_backtrace IO.stderr; raise e
+	in
 	let form = Hybrid.init_formula aut in 
 	let from_mapped = Basic.subst_formula (mk_variable 0 "_0") form in
 	let enforcement = mk_cnd (mk_enforce 0 aut) (Mode.mode_numId mode) in
@@ -1053,8 +1079,15 @@ let mk_goal_network n k =
 	let enforcement = List.map (fun x ->
 		begin
 			let (aut, mode) = x in
-			let a_obj = List.find (fun a -> (Hybrid.name a) = aut) auta in
-			let autmode = Map.find x (Modemapping.name_to_obj (Network.modemapping n)) in
+			let a_obj = try List.find (fun a -> (Hybrid.name a) = aut) auta
+				    with e -> Printexc.print_backtrace IO.stderr; raise e
+			in
+			let autmode =
+			  try Map.find x (Modemapping.name_to_obj (Network.modemapping n))
+			  with  e ->
+			    Printexc.print_backtrace IO.stderr;
+			    raise e
+			in
 			mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)
 		end
 	) 
@@ -1080,7 +1113,7 @@ let split_decls_assertions lst path =
            | _ -> raise (SMTException "We should only have interval here."))
          lst)
   
-let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (precompute: bool) (filter: bool) =
+let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (precompute: bool) (heuristic : Costmap.t list option) =
   let automatalist = List.map (fun x -> Hybrid.name x) (Network.automata h) in
   let vardecls = Network.all_vars_unique (Network.automata h) in (*global vars, basically*)
   let time_var_l = Network.time h in
@@ -1134,31 +1167,31 @@ let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (pre
       (Network.all_label_names_unique (Network.automata h)))
     | true -> []
   in
-  let gamma = List.flatten (List.flatten (List.map (
-    fun x -> List.map (
-      fun y -> List.map (
-        fun z -> (mk_gamma z x y, Value.Intv (0.0, 1.0))
-      )
+  let gamma = List.flatten (List.flatten (List.mapi (
+   fun ia x -> List.map (
+    fun z -> List.map (
+     fun y -> (mk_gamma z x y, Value.Intv (0.0, 1.0))
+	     )
+	     (filter_aut_mode_distance x z heuristic ia)
+	 )
       (List.of_enum (0 -- k))
-    )
-    (filter_aut_mode_distance x k filter)
   )
   (Network.automata h))) in
-  let gamma_t = List.flatten (List.flatten (List.map (
-    fun x -> List.map (
-      fun y -> List.map (
-        fun z -> (mk_gamma_t z x y, Value.Intv (0.0, 1.0))
+  let gamma_t = List.flatten (List.flatten (List.mapi (
+    fun ia x -> List.map (
+      fun z -> List.map (
+        fun y -> (mk_gamma_t z x y, Value.Intv (0.0, 1.0))
       )
-      (List.of_enum (0 -- k))
+    (filter_aut_mode_distance x k heuristic ia)
+		  )
+			       (List.of_enum (0 -- k))
     )
-    (filter_aut_mode_distance x k filter)
-  )
   (Network.automata h))) in
-  let gamma_plain = List.flatten (List.map (
-    fun x -> List.map (
+  let gamma_plain = List.flatten (List.mapi (
+    fun ia x -> List.map (
       fun y -> DeclareFun (mk_gamma_nt x y)
     )
-    (filter_aut_mode_distance x k filter)
+    (filter_aut_mode_distance x k heuristic ia)
   )
   (Network.automata h)) in
   let new_vardecls = List.flatten [vardecls'; time_vardecls] in
@@ -1275,27 +1308,41 @@ let mk_noop aut mode =
 	let change = Basic.make_and (List.map (fun v -> Basic.Eq (Basic.Var (v ^ "'"), Basic.Var v)) aut_vars) in
 	Jump.make (True, Mode.mode_id mode, change, [])
   
-let trans n aut i k (filter: bool) = 
+let trans n aut i k heuristic ia = 
 	let name = Hybrid.name aut in
 	let getMode mname = begin
 		let mapping = Network.modemapping n in
 		let name_to_obj = Modemapping.name_to_obj mapping in
-		Map.find (name, mname) name_to_obj
-	end in
-	let modes = match filter with 
-		| false -> Map.bindings (Hybrid.modemap aut)
-		| true -> List.filter (fun (_, m) -> (Mode.init_dist m) <= k) (Map.bindings (Hybrid.modemap aut)) in
-	(*let jumps = *)List.flatten (List.map (fun (modename, modeobj) -> 
-		begin
-			let jm = match filter with 
-				| false -> Mode.jumps modeobj
-				| true -> List.filter (fun j -> Mode.init_dist (getMode (Jump.target j)) <= k) (Mode.jumps modeobj) in
-			(* Add noop transition *)
-			let jmn = (mk_noop aut modeobj)::jm in
-			List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jmn
-		end
-	) 
-	modes)
+		try Map.find (name, mname) name_to_obj with
+		  e ->
+		  Printexc.print_backtrace IO.stderr;
+		  raise e
+	  end in
+	let modemapbindings = Map.bindings (Hybrid.modemap aut) in
+	let modes = match heuristic with 
+		| None -> modemapbindings
+		| Some h -> let reach = filter_aut_mode_distance aut i heuristic ia in
+			    List.filter (fun (_, m) ->  List.mem m reach) modemapbindings
+	in
+	let jumps = 
+	List.flatten (List.map (fun (modename, modeobj) -> 
+				begin					   
+				  let jumps = (Mode.jumps modeobj) in				 
+				  let jm = match heuristic with 
+				    | None -> jumps
+				    | Some h ->
+				       let reach = filter_aut_mode_distance aut (i+1) heuristic ia in
+				       List.filter (fun j -> List.mem (getMode (Jump.target j)) reach)  jumps
+			       
+				  in
+
+				  (* Add noop transition *)
+				  let jmn = (mk_noop aut modeobj)::jm in
+				  List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jmn
+				end
+			       ) 
+			       modes) in
+	jumps
 	
 let global_label_set n = 
 	let auta = Network.automata n in
@@ -1464,9 +1511,9 @@ let get_unlabeled_jumps jmplist =
 	let c = List.filter (fun (_, (_, lbl, _, _)) -> lbl = []) b in
 	c
 	
-let trans_network_precomposed n i k (filter: bool) =
+let trans_network_precomposed n i k heuristic =
 	let automata = Network.automata n in
-	let jumplst = List.map (fun a -> (a, trans n a i k filter)) automata in
+	let jumplst = List.mapi (fun ia a -> (a, trans n a i k heuristic ia)) automata in
 	let jc = get_jump_conjunctions jumplst [] in
 	let a = List.map (fun (x, y) -> y) jc in
 	let b = List.flatten a in
@@ -1477,9 +1524,9 @@ let trans_network_precomposed n i k (filter: bool) =
 	let omuj = Basic.make_or muj in
 	Basic.make_or [oc; omuj]
 	
-let trans_network n i k (filter: bool) =
+let trans_network n i k heuristic =
 	let automata = Network.automata n in
-	let jumplst = List.map (fun a -> (a, trans n a i k filter)) automata in
+	let jumplst = List.mapi (fun ia a -> (a, trans n a i k heuristic ia)) automata in
 	let ax = List.map (fun (a, jlist) ->
 		Basic.make_or (List.map (fun j -> trans_jump_sync a j i) jlist)
 	) 
@@ -1495,9 +1542,9 @@ let mk_active_mode (aut: Hybrid.t) (m: Mode.t) (i: int) =
 	let gam1 = mk_cnd (mk_gamma i aut m) 1 in
 	Basic.make_and [(Basic.Imply (enf, gam1)); (Basic.Imply (gam1, enf)); (Basic.Imply (nenf, gam0)); (Basic.Imply (gam0, nenf))]
 	
-let mk_active (n: Network.t) (i: int) k (filter: bool) = 
+let mk_active (n: Network.t) (i: int) k (heuristic : Costmap.t list option) = 
 	let auta = Network.automata n in
-	let amodes = List.map (fun a -> (a, filter_aut_mode_distance a k filter)) auta in
+	let amodes = List.mapi (fun ia a -> (a, filter_aut_mode_distance a i heuristic ia)) auta in
 	Basic.make_and (List.map (fun (a, mlist) -> Basic.make_and (List.map (fun m -> mk_active_mode a m i) mlist)) amodes)
 	
 let mk_mode_pair_mutex (aut: Hybrid.t) (m: Mode.t) (m1: Mode.t) (i: int) = 
@@ -1506,113 +1553,77 @@ let mk_mode_pair_mutex (aut: Hybrid.t) (m: Mode.t) (m1: Mode.t) (i: int) =
   Basic.make_or( [Basic.Not(mk_cnd (mk_enforce i aut) nId);Basic.Not(mk_cnd (mk_enforce i aut) nId1)] )
 
 
-let mk_mode_mutex (n: Network.t) (i: int) k (filter: bool) = 
+let mk_mode_mutex (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
 	let auta = Network.automata n in
-	let amodes = List.map (fun a -> (a, filter_aut_mode_distance a k filter)) auta in
+	let amodes = List.mapi (fun ia a -> (a, filter_aut_mode_distance a i heuristic ia)) auta in
 	Basic.make_and (List.map (fun (a, mlist) -> 
-				  Basic.make_and (List.map (fun m -> Basic.make_and (List.map (fun m1 -> if m != m1 then mk_mode_pair_mutex a m m1 i else Basic.True) mlist)) mlist)) amodes)
-				  
-(** generate logic formula for each step 0...k **)
-(*let process_step (varmap : Vardeclmap.t)
-                 (modemap : Modemap.t)
-                 (mode : int option)
-                 (step : int)
-    : Basic.formula =
-  let num_of_modes = Enum.count (Map.keys modemap) in
+				  Basic.make_and (List.map (fun m -> Basic.make_and (List.map (fun m1 -> if m != m1 then mk_mode_pair_mutex a m m1 i else Basic.True) mlist)) mlist))
+				 amodes)
+
+let mk_step (n: Network.t) (mode: string option) (step: int) (k: int) (heuristic : Costmap.t list option): Basic.formula = 
+  let h = List.hd (n.automata) in
+  let mm = Hybrid.modemap h in
   let list_of_modes = match mode with
       Some n -> [n]
-     | None -> List.of_enum ( 1 -- num_of_modes ) in
+    | None -> List.map (fun (id, mo) -> id) (Map.bindings h.modemap) in
   let jump_flow_part =
     List.map
       (fun q ->
        try
-         let flow_for_q = process_flow ~k:step ~q varmap modemap in
-         let mode_q = Map.find q modemap in
-         let jump_for_q_nq  =
-           Basic.make_or (List.map
-                            (fun j -> process_jump modemap q j step)
-                            (Mode.jumps mode_q))
-         in
-         Basic.make_and [flow_for_q; jump_for_q_nq]
+	 let flow_for_q = mk_maintain n step k heuristic in (*process_flow ~k:step ~q varmap modemap in*)
+	 let mode_q = Map.find q h.modemap in
+	 let jump_for_q_nq  =
+	   Basic.make_or (List.map
+			    (*(fun j -> process_jump modemap q j step)*)
+			    (fun j -> trans_jump_sync h (mode_q, Jump.label j, Map.find (Jump.target j) mm, j) step)
+			    (Mode.jumps mode_q))
+	 in
+	 Basic.make_and [flow_for_q; jump_for_q_nq]
        with e ->
-         begin
-           Printexc.print_backtrace IO.stderr;
-           raise e
-         end
+	 begin
+	   Printexc.print_backtrace IO.stderr;
+	   raise e
+	 end
       )
       list_of_modes
   in
   Basic.make_or jump_flow_part
-
-let final_flow varmap modemap mode k =
-  let list_of_modes = match mode with
-      Some n -> [n]
-    | None ->
-       let num_modes = Enum.count (Map.keys modemap) in
-       List.of_enum ( 1 -- num_modes )
-  in let flows =
-       List.map
-         (
-           fun q ->
-           process_flow ~k ~q varmap modemap
-         )
-         list_of_modes
-     in
-     Basic.make_or flows
-*)
-
-(*let mk_jump aut j i =
-	let (org, lab, des, jmp) = j in*)
-
-let mk_step (n: Network.t) (mode: string option) (step: int) (k: int): Basic.formula = 
-	let h = List.hd (n.automata) in
-	let mm = Hybrid.modemap h in
-	let list_of_modes = match mode with
-		Some n -> [n]
-		| None -> List.map (fun (id, mo) -> id) (Map.bindings h.modemap) in
-	let jump_flow_part =
-		List.map
-			(fun q ->
-				try
-					let flow_for_q = mk_maintain n step k false in (*process_flow ~k:step ~q varmap modemap in*)
-					let mode_q = Map.find q h.modemap in
-					let jump_for_q_nq  =
-						Basic.make_or (List.map
-							(*(fun j -> process_jump modemap q j step)*)
-							(fun j -> trans_jump_sync h (mode_q, Jump.label j, Map.find (Jump.target j) mm, j) step)
-						(Mode.jumps mode_q))
-					in
-					Basic.make_and [flow_for_q; jump_for_q_nq]
-				with e ->
-					begin
-						Printexc.print_backtrace IO.stderr;
-						raise e
-					end
-			)
-		list_of_modes
-	in
-	Basic.make_or jump_flow_part
-  
-let compile_logic_formula (h : Network.t) (k : int) (path: (string list) option) (precompute: bool) (filter: bool) =
+		
+let compile_logic_formula (h : Network.t)
+			  (k : int)
+			  (path: (string list) option)
+			  (precompute: bool)
+			  (heuristic : Costmap.t list option) =
   let init_clause = mk_init_network h in
   let list_of_steps = List.of_enum (0 -- (k-1)) in
-  let steps = match path with 
+    let steps = match path with 
 	| None -> begin
-		match precompute with
-			| true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x k filter);(mk_active h x k filter);(mk_maintain h x k filter);(trans_network_precomposed h x k filter)]) list_of_steps)
-			| false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x k filter);(mk_active h x k filter);(mk_maintain h x k filter);(trans_network h x k filter)]) list_of_steps)
+		  match precompute with
+		  | true -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x k heuristic);
+									       (mk_active h x k heuristic);
+									       (mk_maintain h x k heuristic);
+									       (trans_network_precomposed h x k heuristic)]) list_of_steps)
+		  | false -> Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x k heuristic);
+										(mk_active h x k heuristic);
+										(mk_maintain h x k heuristic);
+										(trans_network h x k heuristic)]) list_of_steps)
 		end
-	| Some p -> Basic.make_and (List.map2 (fun q x -> Basic.make_and [(mk_mode_mutex h x k filter);(mk_active h x k filter);(mk_step h (Some q) x k)])
-                          (List.take k p)
-                          list_of_steps) in
-  let goal_clause = Basic.make_and [(mk_goal_network h k);(mk_mode_mutex h k k filter)] in
-  let end_step = Basic.make_and [(mk_active h k k filter); (mk_maintain h k k filter)] in
+	| Some p -> Basic.make_and (List.map2 (fun q x -> Basic.make_and [(mk_mode_mutex h x k heuristic);(mk_active h x k heuristic);(mk_step h (Some q) x k heuristic)])
+					      (List.take k p)
+					      list_of_steps)
+    in
+  let goal_clause = Basic.make_and [(mk_goal_network h k);(mk_mode_mutex h k k heuristic)] in
+  let end_step = Basic.make_and [(mk_active h k k heuristic); (mk_maintain h k k heuristic)] in
   let smt_formula = Basic.make_and (List.flatten [[init_clause]; [steps]; [goal_clause]]) in
   [(Assert init_clause); (Assert steps); (Assert end_step); (Assert goal_clause)]
 
-let compile (h : Network.t) (k : int) (path : (string list) option) (precompute: bool) (filter: bool) =
+let compile (h : Network.t)
+	    (k : int)
+	    (path : (string list) option)
+	    (precompute : bool)
+	    (heuristic : Costmap.t list option) =
   let logic_cmd = SetLogic QF_NRA_ODE in
-  let (vardecl_cmds, assert_cmds) = compile_vardecl h k path precompute filter in
-  let odedef = compile_ode_definition h k filter in
-  let assert_formula = compile_logic_formula h k path precompute filter in
+  let (vardecl_cmds, assert_cmds) = compile_vardecl h k path precompute heuristic in
+  let odedef = compile_ode_definition h k heuristic in
+  let assert_formula = compile_logic_formula h k path precompute heuristic in
   List.flatten [[logic_cmd];vardecl_cmds; odedef; assert_cmds; assert_formula; [CheckSAT; Exit]]

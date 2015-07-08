@@ -25,7 +25,7 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "cnfizers/Tseitin.h"
 #include "smtsolvers/SimpSMTSolver.h"
 #include "version.h"
-#include <glog/logging.h>
+#include "util/logging.h"
 
 #ifndef SMTCOMP
 
@@ -34,12 +34,10 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
   OpenSMTContext * FROM_ = static_cast< OpenSMTContext * >( FROM ); \
   OpenSMTContext & TO = *FROM_;
 
-
 //
 // Communication APIs
 //
 void opensmt_init() {
-  google::InitGoogleLogging("");
 }
 
 void opensmt_set_verbosity( opensmt_context c, int v )
@@ -266,7 +264,7 @@ opensmt_expr opensmt_mk_false( opensmt_context c )
   return static_cast< void * >( res );
 }
 
-opensmt_expr opensmt_mk_bool_var( opensmt_context c, char * s )
+opensmt_expr opensmt_mk_bool_var( opensmt_context c, char const * s )
 {
   assert( c );
   assert( s );
@@ -278,7 +276,7 @@ opensmt_expr opensmt_mk_bool_var( opensmt_context c, char * s )
   return static_cast< void * >( res );
 }
 
-opensmt_expr opensmt_mk_int_var( opensmt_context c, char * s , long lb, long ub)
+opensmt_expr opensmt_mk_int_var( opensmt_context c, char const * s , long lb, long ub)
 {
   assert( c );
   assert( s );
@@ -294,7 +292,7 @@ opensmt_expr opensmt_mk_int_var( opensmt_context c, char * s , long lb, long ub)
   return static_cast< void * >( res );
 }
 
-opensmt_expr opensmt_mk_real_var( opensmt_context c, char * s , double lb, double ub)
+opensmt_expr opensmt_mk_real_var( opensmt_context c, char const * s , double lb, double ub)
 {
   assert( c );
   assert( s );
@@ -384,6 +382,15 @@ opensmt_expr opensmt_mk_num_from_string( opensmt_context c, const char * s )
   OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
   OpenSMTContext & context = *c_;
   Enode * res = context.mkNum( s );
+  return res;
+}
+
+opensmt_expr opensmt_mk_num( opensmt_context c, double const v )
+{
+  assert( c );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  Enode * res = context.mkNum( v );
   return res;
 }
 

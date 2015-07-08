@@ -31,7 +31,7 @@ public:
   // For scripts
   //
   OpenSMTContext( int    argc
-                , char * argv[ ] )
+                , const char * argv[ ] )
     : config_p     ( new SMTConfig( argc, argv ) )
     , config       ( *config_p )
     , sstore_p     ( new SStore( config ) )
@@ -100,6 +100,7 @@ public:
   void          SetInfo              ( const char *, const char * ); // Set info
   void          DeclareSort          ( const char *, int );          // Declares a new sort
   void          DeclareFun           ( const char *, Snode * );      // Declares a new function symbol
+  void          DeclareFun           ( const char *, Snode * , const char * p);  // Declares a new function symbol
   void          DefineODE            ( char const *, vector<pair<string, Enode *> *> * odes );      // Define an ODE
 
   void          Push                 ( );

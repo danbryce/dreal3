@@ -93,6 +93,7 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
   , random_seed      (91648253)
   , progress_estimate(0)
   , remove_satisfied (true)
+  , fake_clause      (nullptr)
   , learnt_t_lemmata      (0)
   , perm_learnt_t_lemmata (0)
   , luby_i                (0)
@@ -375,10 +376,12 @@ void CoreSMTSolver::attachClause(Clause& c) {
 
 void CoreSMTSolver::detachClause(Clause& c) {
   assert(c.size() > 1);
-  assert(find(watches[toInt(~c[0])], &c));
-  assert(find(watches[toInt(~c[1])], &c));
-  remove(watches[toInt(~c[0])], &c);
-  remove(watches[toInt(~c[1])], &c);
+  if (find(watches[toInt(~c[0])], &c)) {
+    remove(watches[toInt(~c[0])], &c);
+  }
+  if (find(watches[toInt(~c[1])], &c)) {
+    remove(watches[toInt(~c[1])], &c);
+  }
   if (c.learnt()) learnts_literals -= c.size();
   else            clauses_literals -= c.size();
 }
@@ -1380,6 +1383,15 @@ CoreSMTSolver::pushBacktrackPoint( )
 #endif
 }
 
+// bool find(vec< Clause * > const & clauses, Clause * c) {
+//     for (int i = 0; clauses.size(); i++) {
+//       if (clauses[i] == c) {
+//         return true;
+//       }
+//     }
+//     return false;
+// }
+
   void
 CoreSMTSolver::popBacktrackPoint ( )
 {
@@ -1442,22 +1454,28 @@ CoreSMTSolver::popBacktrackPoint ( )
     else if ( op == NEWCLAUSE )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( clauses.last( ) == c );
-      clauses.pop( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        assert( clauses.last( ) == c );
+        clauses.pop( );
+        removeClause( *c );
+      }
     }
     else if ( op == NEWLEARNT )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      detachClause( *c );
-      detached.insert( c );
+      if (find(clauses, c)) {
+        detachClause( *c );
+        detached.insert( c );
+      }
     }
     else if ( op == NEWAXIOM )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( axioms.last( ) == c );
+      if (find(clauses, c)) {
+        assert( axioms.last( ) == c );
+        removeClause( *c );
+      }
       axioms.pop( );
-      removeClause( *c );
     }
 #ifdef PRODUCE_PROOF
     else if ( op == NEWPROOF )
@@ -1548,21 +1566,27 @@ CoreSMTSolver::reset( )
     else if ( op == NEWCLAUSE )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( clauses.last( ) == c );
-      clauses.pop( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        assert( clauses.last( ) == c );
+        clauses.pop( );
+        removeClause( *c );
+      }
     }
     else if ( op == NEWLEARNT )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        removeClause( *c );
+      }
     }
     else if ( op == NEWAXIOM )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( axioms.last( ) == c );
+      if (find(clauses, c)) {
+        assert( axioms.last( ) == c );
+        removeClause( *c );
+      }
       axioms.pop( );
-      removeClause( *c );
     }
 #ifdef PRODUCE_PROOF
     else if ( op == NEWPROOF )
@@ -1587,7 +1611,9 @@ CoreSMTSolver::reset( )
   {
     Clause * c = learnts.last( );
     learnts.pop( );
-    removeClause( *c );
+    if (find(clauses, c)) {
+      removeClause( *c );
+    }
   }
 #ifdef PRODUCE_PROOF
   proof.reset( );

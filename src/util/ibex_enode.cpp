@@ -63,10 +63,11 @@ ExprNode const * translate_enode_to_exprnode(unordered_map<string, Variable cons
         throw logic_error("translateEnodeExprNode: Numb");
     } else if (e->isTerm()) {
         assert(e->getArity() >= 1);
-        ExprNode const * ret = translate_enode_to_exprnode(var_map, e->get1st());
         enodeid_t id = e->getCar()->getId();
+        ExprNode const * ret = nullptr;
         switch (id) {
         case ENODE_ID_PLUS:
+            ret = translate_enode_to_exprnode(var_map, e->get1st());
             e = e->getCdr()->getCdr();  // e is pointing to the 2nd arg
             while (!e->isEnil()) {
                 ret = &(*ret + *translate_enode_to_exprnode(var_map, e->getCar()));
@@ -74,6 +75,7 @@ ExprNode const * translate_enode_to_exprnode(unordered_map<string, Variable cons
             }
             return ret;
         case ENODE_ID_MINUS:
+            ret = translate_enode_to_exprnode(var_map, e->get1st());
             e = e->getCdr()->getCdr();  // e is pointing to the 2nd arg
             while (!e->isEnil()) {
                 ret = &(*ret - *translate_enode_to_exprnode(var_map, e->getCar()));
@@ -81,9 +83,11 @@ ExprNode const * translate_enode_to_exprnode(unordered_map<string, Variable cons
             }
             return ret;
         case ENODE_ID_UMINUS:
+            ret = translate_enode_to_exprnode(var_map, e->get1st());
             assert(e->getArity() == 1);
             return &(- *ret);
         case ENODE_ID_TIMES:
+            ret = translate_enode_to_exprnode(var_map, e->get1st());
             e = e->getCdr()->getCdr();  // e is pointing to the 2nd arg
             while (!e->isEnil()) {
                 ret = &(*ret * *translate_enode_to_exprnode(var_map, e->getCar()));
@@ -91,6 +95,7 @@ ExprNode const * translate_enode_to_exprnode(unordered_map<string, Variable cons
             }
             return ret;
         case ENODE_ID_DIV:
+            ret = translate_enode_to_exprnode(var_map, e->get1st());
             e = e->getCdr()->getCdr();  // e is pointing to the 2nd arg
             while (!e->isEnil()) {
                 ret = &(*ret / *translate_enode_to_exprnode(var_map, e->getCar()));
@@ -219,25 +224,62 @@ ExprCtr const * translate_enode_to_exprctr(unordered_map<string, Variable const>
     // Enode const * const rel = e->getCar();
     Enode const * const first_op = e->get1st();
     Enode const * const second_op = e->get2nd();
+    ExprCtr const * ret = nullptr;
 
-    ExprNode const * left = translate_enode_to_exprnode(var_map, first_op);
-    ExprNode const * right = translate_enode_to_exprnode(var_map, second_op);
+    ExprNode const * left = nullptr;
+    ExprNode const * right = nullptr;
+    bool const is_right_zero = second_op->isConstant() && second_op->getValue() == 0.0;
+    if (is_right_zero) {
+        right = &ExprConstant::new_scalar(0.0);
+    }
+
     auto const polarity = p == l_Undef ? e->getPolarity() : p;
     switch (e->getCar()->getId()) {
-    case ENODE_ID_EQ:
+    case ENODE_ID_EQ: {
         // TODO(soonhok): remove != case
-        return (polarity == l_True) ? &(*left =  *right) : nullptr;
+        if (polarity == l_True) {
+            left = translate_enode_to_exprnode(var_map, first_op);
+            if (!is_right_zero) {
+                right = translate_enode_to_exprnode(var_map, second_op);
+            }
+            ret = &(*left = *right);
+        }
+        break;
+    }
     case ENODE_ID_LEQ:
-        return (polarity == l_True) ? &(*left <= *right) : &(*left >  *right);
+        left = translate_enode_to_exprnode(var_map, first_op);
+        if (!is_right_zero) {
+            right = translate_enode_to_exprnode(var_map, second_op);
+        }
+        ret = (polarity == l_True) ? &(*left <= *right) : &(*left >  *right);
+        break;
     case ENODE_ID_GEQ:
-        return (polarity == l_True) ? &(*left >= *right) : &(*left <= *right);
+        left = translate_enode_to_exprnode(var_map, first_op);
+        if (!is_right_zero) {
+            right = translate_enode_to_exprnode(var_map, second_op);
+        }
+        ret = (polarity == l_True) ? &(*left >= *right) : &(*left < *right);
+        break;
     case ENODE_ID_LT:
-        return (polarity == l_True) ? &(*left <  *right) : &(*left >  *right);
+        left = translate_enode_to_exprnode(var_map, first_op);
+        if (!is_right_zero) {
+            right = translate_enode_to_exprnode(var_map, second_op);
+        }
+        ret = (polarity == l_True) ? &(*left <  *right) : &(*left >=  *right);
+        break;
     case ENODE_ID_GT:
-        return (polarity == l_True) ? &(*left >  *right) : &(*left <  *right);
+        left = translate_enode_to_exprnode(var_map, first_op);
+        if (!right) {
+            right = translate_enode_to_exprnode(var_map, second_op);
+        }
+        ret = (polarity == l_True) ? &(*left >  *right) : &(*left <=  *right);
+        break;
     default:
         throw logic_error("translate_enode_to_exprctr: default");
     }
-    throw logic_error("Not implemented yet: translate_enode_to_exprctr");
+    if (is_right_zero) {
+        delete right;
+    }
+    return ret;
 }
 }  // namespace dreal

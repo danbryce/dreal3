@@ -38,27 +38,20 @@ struct SMTConfig
   // For standard executable
   //
   SMTConfig ( int    argc
-            , char * argv[ ] )
+            , const char * argv[ ] )
     : rocset   ( false )
     , docset   ( false )
   {
     initializeConfig( );
-    if (argc > 1) {
-        filename = argv[argc - 1];
-        struct stat s;
-        if(stat(filename,&s) != 0 || !(s.st_mode & S_IFREG)) {
-            opensmt_error( "can't open file" );
-        }
-    } else {
-        filename = "output";
-    }
-    // Parse command-line options
     parseCMDLine( argc, argv );
   }
   //
   // For API
   //
   SMTConfig ( )
+    : produce_stats ( false )
+    , rocset ( false )
+    , docset ( false )
   {
     initializeConfig( );
   }
@@ -73,8 +66,7 @@ struct SMTConfig
   void initializeConfig ( );
 
   void parseConfig      ( char * );
-  void parseCMDLine     ( int argc, char * argv[ ] );
-  void printHelp        ( );
+  void parseCMDLine     ( int argc, const char * argv[ ] );
   void printConfig      ( ostream & out );
 
   inline bool      isInit      ( ) { return logic != UNDEF; }
@@ -109,7 +101,7 @@ struct SMTConfig
     }
   }
 
-  const char * filename;                     // Holds the name of the input filename
+  string       filename;                     // Holds the name of the input filename
   logic_t      logic;                        // SMT-Logic under consideration
   lbool        status;                       // Status of the benchmark
   int          incremental;                  // Incremental solving
@@ -184,7 +176,6 @@ struct SMTConfig
   bool         nra_use_delta_heuristic;       // Split variable in constraint with max residual delta?
   bool         nra_short_sat;                 // Test theory if CNF is SAT, before have full model.
   double       nra_precision;                 // the value of delta
-  double       nra_icp_improve;               // improve value for realpaver(ICP)
   bool         nra_verbose;                   // --verbose option
   bool         nra_debug;                     // --debug option
   bool         nra_stat;                      // --stat option
@@ -198,19 +189,21 @@ struct SMTConfig
   bool         nra_json;                      // --proof option
   ofstream     nra_json_out;                  // file stream for json (visualization)
   string       nra_json_out_name;             // filename for json (visualization)
-  unsigned     nra_ODE_taylor_order;          // --ode-order option
-  unsigned     nra_ODE_grid_size;             // --ode-grid option
-  unsigned     nra_ODE_timeout;               // --ode-timeout option
+  unsigned long nra_ODE_taylor_order;          // --ode-order option
+  unsigned long nra_ODE_grid_size;             // --ode-grid option
+  unsigned long nra_ODE_timeout;               // --ode-timeout option
   double       nra_ODE_step;                  // step control
   bool         nra_ODE_contain;               // contain ODE or not
   bool         nra_ODE_cache;                 // use cache for ODE computation
   bool         nra_ODE_forward_only;          // only use ODE forward pruning (not use ODE backward)
   bool         nra_ODE_parallel;              // solve ODE in parallel or not
-  unsigned     nra_aggressive;                // number of samples to use for aggressive sampling
-  unsigned     nra_sample;                    // number of samples to use for sound sampling
-  unsigned     nra_multiple_soln;             // maximum number of solutions to find
-  unsigned     nra_found_soln;                // number of solutions found so far
+  unsigned long nra_aggressive;                // number of samples to use for aggressive sampling
+  unsigned long nra_sample;                    // number of samples to use for sound sampling
+  unsigned long nra_multiple_soln;             // maximum number of solutions to find
+  unsigned long nra_found_soln;                // number of solutions found so far
   bool         nra_polytope;                  // use polytope contractor in IBEX
+  bool         nra_simp;                      // use simplification in preprocessing
+  bool         nra_ncbt;                      // use nonchronological backtracking in icp
   int          nra_output_num_nodes;          // output number of SAT and ICP nodes
   string       nra_plan_heuristic;            // use the plan heuristic from file
   string       nra_plan_domain;               // planning domain

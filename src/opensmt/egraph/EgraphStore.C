@@ -639,7 +639,7 @@ Enode * Egraph::mkFun( const char * name, Enode * args )
 //
 // Creates a new symbol. Name must be new
 //
-Enode * Egraph::newSymbol( const char * name, Snode * s )
+Enode * Egraph::newSymbol( const char * name, Snode * s , double p )
 {
   assert( s );
   assert( s->isTerm( ) );
@@ -659,6 +659,9 @@ Enode * Egraph::newSymbol( const char * name, Snode * s )
 
   insertSymbol( new_enode );
   assert( lookupSymbol( ss.str( ).c_str( ) ) == new_enode );
+  if (p != 0.0) {
+    new_enode->setPrecision(p);
+  }
   return new_enode;
 }
 
@@ -726,6 +729,9 @@ Enode * Egraph::mkEq( Enode * args )
   assert( args->isList( ) );
   assert( args->getCar( ) );
   assert( args->getCdr( )->getCar( ) );
+  if (!args || !args->isList() || !args->getCar() || !args->getCdr()->getCar()) {
+      return nullptr;
+  }
 
   Enode * x = args->getCar( );
   Enode * y = args->getCdr( )->getCar( );
@@ -758,6 +764,9 @@ Enode * Egraph::mkLeq( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
+  }
 
   Enode * x = args->getCar( );
   Enode * y = args->getCdr( )->getCar( );
@@ -787,6 +796,9 @@ Enode * Egraph::mkAbs (Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_ABS], args );
   assert( res );
   return res;
@@ -796,8 +808,8 @@ Enode * Egraph::mkPow (Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 2 );
-  if (args->getArity( ) != 2) {
-      throw std::runtime_error("Egraph::mkPow: The number of arguments should be two.");
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
   }
   Enode * res = cons( id_to_enode[ ENODE_ID_POW], args );
   assert( res );
@@ -808,6 +820,9 @@ Enode * Egraph::mkSin              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_SIN], args );
   assert( res );
   return res;
@@ -815,6 +830,11 @@ Enode * Egraph::mkSin              ( Enode * args)
 
 Enode * Egraph::mkCos              ( Enode * args)
 {
+  assert( args );
+  assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_COS], args );
   assert( res );
   return res;
@@ -824,6 +844,9 @@ Enode * Egraph::mkTan              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_TAN], args );
   assert( res );
   return res;
@@ -833,6 +856,9 @@ Enode * Egraph::mkAsin              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_ASIN], args );
   assert( res );
   return res;
@@ -842,6 +868,9 @@ Enode * Egraph::mkAcos              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_ACOS], args );
   assert( res );
   return res;
@@ -851,6 +880,9 @@ Enode * Egraph::mkAtan              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_ATAN], args );
   assert( res );
   return res;
@@ -860,6 +892,9 @@ Enode * Egraph::mkSinh             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_SINH ], args );
   assert( res );
   return res;
@@ -867,6 +902,11 @@ Enode * Egraph::mkSinh             ( Enode * args)
 
 Enode * Egraph::mkCosh             ( Enode * args)
 {
+  assert( args );
+  assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_COSH ], args );
   assert( res );
   return res;
@@ -876,6 +916,9 @@ Enode * Egraph::mkTanh             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_TANH ], args );
   assert( res );
   return res;
@@ -885,6 +928,9 @@ Enode * Egraph::mkAtan2             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_ATAN2], args );
   assert( res );
   return res;
@@ -894,6 +940,9 @@ Enode * Egraph::mkMin             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_MIN], args );
   assert( res );
   return res;
@@ -903,6 +952,9 @@ Enode * Egraph::mkMax             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_MAX], args );
   assert( res );
   return res;
@@ -912,6 +964,9 @@ Enode * Egraph::mkMatan             ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_MATAN], args );
   assert( res );
   return res;
@@ -921,6 +976,9 @@ Enode * Egraph::mkSqrt            ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_SQRT], args );
   assert( res );
   return res;
@@ -930,6 +988,9 @@ Enode * Egraph::mkSafeSqrt            ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_SAFESQRT], args );
   assert( res );
   return res;
@@ -939,6 +1000,9 @@ Enode * Egraph::mkExp              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_EXP], args );
   assert( res );
   return res;
@@ -948,6 +1012,9 @@ Enode * Egraph::mkLog              ( Enode * args)
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
   Enode * res = cons( id_to_enode[ ENODE_ID_LOG], args );
   assert( res );
   return res;
@@ -958,6 +1025,9 @@ Enode * Egraph::mkPlus( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) >= 1 );
+  if ( !args || args->getArity() < 1) {
+      return nullptr;
+  }
 
   if ( args->getArity( ) == 1 )
     return args->getCar( );
@@ -968,7 +1038,7 @@ Enode * Egraph::mkPlus( Enode * args )
   //
   // Simplify constants
   //
-  if ( x->isConstant( ) && y->isConstant( ) && args->getArity( ) == 2 )
+  if ( config.nra_simp && x->isConstant( ) && y->isConstant( ) && args->getArity( ) == 2 )
   {
     const double xval = x->getValue( );
     const double yval = y->getValue( );
@@ -987,6 +1057,10 @@ Enode * Egraph::mkPlus( Enode * args )
 Enode * Egraph::mkMinus( Enode * args )
 {
   assert( args );
+
+  if ( !args || args->getArity() < 1) {
+      return nullptr;
+  }
 
   if ( args->getArity( ) == 1 )
     return mkUminus( args );
@@ -1008,6 +1082,9 @@ Enode * Egraph::mkUminus( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) == 1 );
+  if ( !args || args->getArity() != 1) {
+      return nullptr;
+  }
 
   Enode * x = args->getCar( );
   Enode * mo = mkNum( "-1" );
@@ -1019,34 +1096,39 @@ Enode * Egraph::mkTimes( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) >= 2 );
+  if ( !args || args->getArity() < 2) {
+      return nullptr;
+  }
 
   Enode * res = NULL;
-  double const zero_ = 0;
-  Enode * zero = mkNum( zero_ );
+  if (config.nra_simp) {
+      double const zero_ = 0;
+      Enode * zero = mkNum( zero_ );
 
-  // Check whether it contains zero or not
-  bool contain_zero = false;
-  for (Enode const * head = args; !head->isEnil(); head = head->getCdr()) {
-      Enode const * const arg = head->getCar();
-      if (arg->isConstant() && arg->getValue() == 0.0) {
-          contain_zero = true;
-          break;
+      // Check whether it contains zero or not
+      bool contain_zero = false;
+      for (Enode const * head = args; !head->isEnil(); head = head->getCdr()) {
+          Enode const * const arg = head->getCar();
+          if (arg->isConstant() && arg->getValue() == 0.0) {
+              contain_zero = true;
+              break;
+          }
       }
-  }
-  if (contain_zero) {
-      res = zero;
-  } else if (args->getArity() == 2) {
-      Enode * x = args->getCar( );
-      Enode * y = args->getCdr( )->getCar( );
-      if ( x->isConstant( ) && y->isConstant( ) ) {
-          // Simplify constants
-          const double xval = x->getValue( );
-          const double yval = y->getValue( );
-          double times = xval * yval;
-          res = mkNum( times );
-      }
-      else if ( x == y ) {
-          return mkPow( cons(x, cons(mkNum(2.0)) ) );
+      if (contain_zero) {
+          res = zero;
+      } else if (args->getArity() == 2) {
+          Enode * x = args->getCar( );
+          Enode * y = args->getCdr( )->getCar( );
+          if ( x->isConstant( ) && y->isConstant( ) ) {
+              // Simplify constants
+              const double xval = x->getValue( );
+              const double yval = y->getValue( );
+              double times = xval * yval;
+              res = mkNum( times );
+          }
+          else if ( x == y ) {
+              return mkPow( cons(x, cons(mkNum(2.0)) ) );
+          }
       }
   }
   if (!res) {
@@ -1060,6 +1142,9 @@ Enode * Egraph::mkDiv( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if ( !args || args->getArity() != 2) {
+      return nullptr;
+  }
 
   Enode * res = NULL;
   Enode * x = args->getCar( );
@@ -1071,26 +1156,26 @@ Enode * Egraph::mkDiv( Enode * args )
   if ( y == zero )
     opensmt_error2( "explicit division by zero in formula", "" );
 
-  //
-  // 0 * x --> 0
-  //
-  if ( x == zero )
-  {
-    res = zero;
+  if (config.nra_simp) {
+      //
+      // 0 * x --> 0
+      //
+      if ( x == zero )
+          {
+              res = zero;
+          }
+      //
+      // Simplify constants
+      //
+      else if ( x->isConstant( ) && y->isConstant( ) ) {
+          const double xval = x->getValue( );
+          const double yval = y->getValue( );
+          double div = xval / yval;
+          res = mkNum( div );
+      }
   }
-  //
-  // Simplify constants
-  //
-  else if ( x->isConstant( ) && y->isConstant( ) )
-  {
-    const double xval = x->getValue( );
-    const double yval = y->getValue( );
-    double div = xval / yval;
-    res = mkNum( div );
-  }
-  else
-  {
-    res = cons( id_to_enode[ ENODE_ID_DIV ], args );
+  if (!res) {
+      res = cons( id_to_enode[ ENODE_ID_DIV ], args );
   }
 
   assert( res );
@@ -1102,14 +1187,20 @@ Enode * Egraph::mkNot( Enode * args )
   assert( args );
   assert( args->isList( ) );
   assert( args->getCar( ) );
+  if ( !args || !args->isList() || !args->getCar() ) {
+      return nullptr;
+  }
+
   Enode * arg = args->getCar( );
   assert( arg->hasSortBool( ) );
   assert( arg->isTerm( ) );
+  if ( !arg || !arg->hasSortBool() || !arg->isTerm() ) {
+      return nullptr;
+  }
 
   // not not p --> p
   if ( arg->isNot( ) )
     return arg->get1st( );
-
 
   // not false --> true
   if ( arg->isFalse( ) )
@@ -1127,6 +1218,10 @@ Enode * Egraph::mkAnd( Enode * args )
   assert( args );
   assert( args->isList( ) );
 
+  if (!args || !args->isList()) {
+      return nullptr;
+  }
+
   initDup1( );
 
   list< Enode * > new_args;
@@ -1134,6 +1229,9 @@ Enode * Egraph::mkAnd( Enode * args )
   {
     Enode * e = alist->getCar( );
     assert( e->hasSortBool( ) );
+    if (!e->hasSortBool()) {
+        return nullptr;
+    }
 
     if ( isDup1( e ) ) continue;
     if ( e->isTrue( ) ) continue;
@@ -1162,6 +1260,9 @@ Enode * Egraph::mkOr( Enode * args )
 {
   assert( args );
   assert( args->isList( ) );
+  if (!args || !args->isList()) {
+      return nullptr;
+  }
 
   initDup1( );
 
@@ -1171,6 +1272,9 @@ Enode * Egraph::mkOr( Enode * args )
     Enode * e = list->getCar( );
 
     assert( e->hasSortBool( ) );
+    if (!e->hasSortBool()) {
+        return nullptr;
+    }
 
     if ( isDup1( e ) ) continue;
     if ( e->isFalse( ) ) continue;
@@ -1195,6 +1299,9 @@ Enode * Egraph::mkIff( Enode * args )
 {
   assert( args );
   assert( args->getArity( ) == 2 );
+  if (!args || args->getArity() != 2) {
+      return nullptr;
+  }
   Enode * first  = args->getCar( );
   Enode * second = args->getCdr( )->getCar( );
 
@@ -1211,6 +1318,9 @@ Enode * Egraph::mkIff( Enode * args )
 Enode * Egraph::mkIte( Enode * args )
 {
   assert( args );
+  if (!args) {
+      return nullptr;
+  }
   Enode * i = args->getCar( );
   Enode * t = args->getCdr( )->getCar( );
   Enode * e = args->getCdr( )->getCdr( )->getCar( );
@@ -1223,6 +1333,9 @@ Enode * Egraph::mkIte( Enode * i, Enode * t, Enode * e )
   assert( t );
   assert( e );
   assert( i->hasSortBool( ) );
+  if (!i || !t || !e || !i->hasSortBool()) {
+      return nullptr;
+  }
 
   if ( i->isTrue( )  ) return t;
   if ( i->isFalse( ) ) return e;
@@ -1236,12 +1349,18 @@ Enode * Egraph::mkIte( Enode * i, Enode * t, Enode * e )
 Enode * Egraph::mkXor( Enode * args )
 {
   assert( args );
-
   assert( args->getArity( ) == 2 );
+  if (!args || args->getArity() != 2) {
+      return nullptr;
+  }
+
   Enode * first  = args->getCar( );
   Enode * second = args->getCdr( )->getCar( );
   assert( first->hasSortBool( ) );
   assert( second->hasSortBool( ) );
+  if (!first->hasSortBool() || second->hasSortBool()) {
+      return nullptr;
+  }
 
   if ( first ->isFalse( ) )               return second;
   if ( first ->isTrue ( ) )               return mkNot( cons( second ) );
@@ -1256,6 +1375,9 @@ Enode * Egraph::mkXor( Enode * args )
 Enode * Egraph::mkImplies( Enode * args )
 {
   assert( args );
+  if (!args) {
+      return nullptr;
+  }
 
   Enode * first  = args->getCar( );
   Enode * second = args->getCdr( )->getCar( );
@@ -1273,6 +1395,9 @@ Enode * Egraph::mkImplies( Enode * args )
 Enode * Egraph::mkDistinct( Enode * args )
 {
   assert( args );
+  if (!args) {
+      return nullptr;
+  }
   Enode * res = NULL;
   //
   // Replace distinction with negated equality when it has only 2 args

@@ -20,7 +20,6 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
 #include "dsolvers/nra_solver.h"
-#include <gflags/gflags.h>
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
@@ -63,8 +62,9 @@ nra_solver::nra_solver(const int i, const char * n, SMTConfig & c, Egraph & e, S
 }
 
 nra_solver::~nra_solver() {
-    for (auto it_ctr : m_ctrs) {
-        delete it_ctr;
+    DREAL_LOG_INFO << "~nra_solver(): m_ctrs.size() = " << m_ctrs.size();
+    for (auto ctr : m_ctrs) {
+        delete ctr;
     }
     if (config.nra_stat) {
         cout << m_stat << endl;
@@ -85,14 +85,6 @@ lbool nra_solver::inform(Enode * e) {
 // state will be checked with "check" assertLit adds a literal(e) to
 // stack of asserted literals.
 bool nra_solver::assertLit(Enode * e, bool reason) {
-    if (config.nra_stat) { m_stat.increase_assert(); }
-
-    if (m_need_init) {
-        m_box.constructFromLiterals(m_lits);
-        m_ctrs = initialize_constraints();
-        m_need_init = false;
-    }
-
     DREAL_LOG_INFO << "nra_solver::assertLit: " << e
                    << ", reason: " << boolalpha << reason
                    << ", polarity: " << e->getPolarity().toInt()
@@ -101,6 +93,15 @@ bool nra_solver::assertLit(Enode * e, bool reason) {
                    << ", getIndex: " << e->getDedIndex()
                    << ", level: " << m_stack.size()
                    << ", ded.size = " << deductions.size();
+
+    if (config.nra_stat) { m_stat.increase_assert(); }
+
+    if (m_need_init) {
+        m_box.constructFromLiterals(m_lits);
+        m_ctrs = initialize_constraints();
+        m_need_init = false;
+    }
+
     (void)reason;
     assert(e);
     assert(belongsToT(e));
@@ -141,14 +142,24 @@ std::vector<constraint *> nra_solver::initialize_constraints() {
             invs.push_back(fc);
         } else {
             // Collect Nonlinear constraints.
-            nonlinear_constraint * nc_pos = new nonlinear_constraint(l, l_True);
-            nonlinear_constraint * nc_neg = new nonlinear_constraint(l, l_False);
-            DREAL_LOG_INFO << "nra_solver::initialize_constraints: collect NonlinearConstraint (+): " << *nc_pos;
-            DREAL_LOG_INFO << "nra_solver::initialize_constraints: collect NonlinearConstraint (-): " << *nc_neg;
-            ctrs.push_back(nc_pos);
-            ctrs.push_back(nc_neg);
-            m_ctr_map.emplace(make_pair(l, true),  nc_pos);
-            m_ctr_map.emplace(make_pair(l, false), nc_neg);
+            auto it_nc_pos = m_ctr_map.find(make_pair(l, true));
+            auto it_nc_neg = m_ctr_map.find(make_pair(l, false));
+            if (it_nc_pos == m_ctr_map.end()) {
+                nonlinear_constraint * nc_pos = new nonlinear_constraint(l, l_True);
+                DREAL_LOG_INFO << "nra_solver::initialize_constraints: collect NonlinearConstraint (+): " << *nc_pos;
+                ctrs.push_back(nc_pos);
+                m_ctr_map.emplace(make_pair(l, true),  nc_pos);
+            } else {
+                ctrs.push_back(it_nc_pos->second);
+            }
+            if (it_nc_neg == m_ctr_map.end()) {
+                nonlinear_constraint * nc_neg = new nonlinear_constraint(l, l_False);
+                DREAL_LOG_INFO << "nra_solver::initialize_constraints: collect NonlinearConstraint (-): " << *nc_neg;
+                ctrs.push_back(nc_neg);
+                m_ctr_map.emplace(make_pair(l, false), nc_neg);
+            } else {
+                ctrs.push_back(it_nc_neg->second);
+            }
         }
     }
     // Attach the corresponding forallT literals to integrals
@@ -172,7 +183,7 @@ std::vector<constraint *> nra_solver::initialize_constraints() {
         }
         ode_constraint * oc = new ode_constraint(ic, local_invs);
         ctrs.push_back(oc);
-        m_ctr_map.emplace(make_pair(ic.get_enodes()[0], true), oc);
+        m_ctr_map.emplace(make_pair(ic.get_enode(), true), oc);
         DREAL_LOG_INFO << "nra_solver::initialize_constraints: collect ODEConstraint: " << *oc;
     }
     return ctrs;
@@ -190,7 +201,7 @@ contractor nra_solver::build_contractor(box const & box, scoped_vec<constraint *
     if (config.nra_sample > 0 && complete) {
         nl_ctcs.push_back(mk_contractor_sample(config.nra_sample, ctrs.get_vec()));
     }
-    for (constraint * const ctr : ctrs) {
+    for (constraint * const ctr : ctrs.get_reverse()) {
         if (ctr->get_type() == constraint_type::Nonlinear) {
             nonlinear_constraint const * const nl_ctr = dynamic_cast<nonlinear_constraint *>(ctr);
             if (nl_ctr->get_numctr()) {
@@ -203,18 +214,21 @@ contractor nra_solver::build_contractor(box const & box, scoped_vec<constraint *
 #ifdef SUPPORT_ODE
         } else if (ctr->get_type() == constraint_type::ODE) {
             // TODO(soonhok): add heuristics to choose fwd/bwd
-            // TODO(soonhok): perform ODE only for complete check
-            ode_ctcs.emplace_back(
-                mk_contractor_try(
-                    mk_contractor_capd_fwd_full(box, dynamic_cast<ode_constraint *>(ctr), config.nra_ODE_taylor_order, config.nra_ODE_grid_size)));
-            ode_ctcs.emplace_back(
-                mk_contractor_try(
-                    mk_contractor_capd_bwd_full(box, dynamic_cast<ode_constraint *>(ctr), config.nra_ODE_taylor_order, config.nra_ODE_grid_size)));
+            if (complete) {
+                ode_ctcs.emplace_back(
+                    mk_contractor_try(
+                        mk_contractor_capd_fwd_full(box, dynamic_cast<ode_constraint *>(ctr), config.nra_ODE_taylor_order, config.nra_ODE_grid_size)));
+                if (!config.nra_ODE_forward_only) {
+                    ode_ctcs.emplace_back(
+                        mk_contractor_try(
+                            mk_contractor_capd_bwd_full(box, dynamic_cast<ode_constraint *>(ctr), config.nra_ODE_taylor_order, config.nra_ODE_grid_size)));
+                }
+            }
 #endif
         }
     }
     if (config.nra_polytope) {
-        nl_ctcs.push_back(mk_contractor_ibex_polytope(config.nra_precision, nl_ctrs));
+        nl_ctcs.push_back(mk_contractor_ibex_polytope(config.nra_precision, box.get_vars(), nl_ctrs));
     }
     nl_ctcs.push_back(mk_contractor_int());
     // Add contractor_sample if --sample option is used
@@ -223,9 +237,6 @@ contractor nra_solver::build_contractor(box const & box, scoped_vec<constraint *
     }
 
     auto term_cond = [this](dreal::box const & old_box, dreal::box const & new_box) {
-        if (new_box.max_diam() < config.nra_precision) {
-            return true;
-        }
         double const threshold = 0.01;
         // If there is a dimension which is improved more than
         // threshold, we stop the current fixed-point computation.
@@ -247,20 +258,24 @@ contractor nra_solver::build_contractor(box const & box, scoped_vec<constraint *
         }
         return true;
     };
-    return mk_contractor_fixpoint(term_cond, nl_ctcs, ode_ctcs, nl_eval_ctcs);
+    if (complete && ode_ctcs.size() > 0) {
+        return mk_contractor_fixpoint(term_cond, nl_ctcs, ode_ctcs, nl_eval_ctcs);
+    } else {
+        return mk_contractor_fixpoint(term_cond, nl_ctcs, nl_eval_ctcs);
+    }
 }
 
 // Saves a backtrack point You are supposed to keep track of the
 // operations, for instance in a vector called "undo_stack_term", as
 // happens in EgraphSolver
 void nra_solver::pushBacktrackPoint() {
+    DREAL_LOG_INFO << "nra_solver::pushBacktrackPoint " << m_stack.size();
     if (m_need_init) {
         m_box.constructFromLiterals(m_lits);
         m_ctrs = initialize_constraints();
         m_need_init = false;
     }
     if (config.nra_stat) { m_stat.increase_push(); }
-    DREAL_LOG_INFO << "nra_solver::pushBacktrackPoint " << m_stack.size();
     m_stack.push();
     m_used_constraint_vec.push();
     m_boxes.push_back(m_box);
@@ -277,12 +292,11 @@ void nra_solver::popBacktrackPoint() {
     DREAL_LOG_INFO << "nra_solver::popBacktrackPoint\t m_stack.size()      = " << m_stack.size();
     m_boxes.pop();
     m_box = m_boxes.last();
-    m_box.assign_to_enode();
     m_used_constraint_vec.pop();
     m_stack.pop();
 }
 
-box icp_loop(box b, contractor const & ctc, SMTConfig & config) {
+box nra_solver::icp_loop(box b, contractor const & ctc, SMTConfig & config) const {
     vector<box> solns;
     stack<box> box_stack;
     box_stack.push(b);
@@ -293,13 +307,15 @@ box icp_loop(box b, contractor const & ctc, SMTConfig & config) {
         box_stack.pop();
         try {
             b = ctc.prune(b, config);
+            if (config.nra_stat) { m_stat.increase_prune(); }
         } catch (contractor_exception & e) {
             // Do nothing
         }
         if (!b.is_empty()) {
-            if (b.max_diam() > config.nra_precision) {
-                tuple<int, box, box> splits = b.bisect();
-                unsigned const i   = get<0>(splits);
+            tuple<int, box, box> splits = b.bisect(config.nra_precision);
+            if (config.nra_stat) { m_stat.increase_branch(); }
+            int const i = get<0>(splits);
+            if (i >= 0) {
                 box const & first  = get<1>(splits);
                 box const & second = get<2>(splits);
                 if (second.is_bisectable()) {
@@ -315,26 +331,26 @@ box icp_loop(box b, contractor const & ctc, SMTConfig & config) {
                                          << "]" << endl;
                 }
             } else {
-                config.nra_found_soln++;
-                if (config.nra_multiple_soln > 1) {
-                    cerr << "Find " << config.nra_found_soln << "-th solution:" << endl;
-                    cerr << b << endl;
-                }
-                solns.push_back(b);
                 if (config.nra_found_soln >= config.nra_multiple_soln) {
                     break;
                 }
+                config.nra_found_soln++;
+                if (config.nra_multiple_soln > 1) {
+                    // If --multiple_soln is used
+                    output_solution(b, config.nra_found_soln);
+                }
+                solns.push_back(b);
             }
         }
     } while (box_stack.size() > 0);
-    if (solns.size() > 0) {
+    if (config.nra_multiple_soln > 1 && solns.size() > 0) {
         return solns.back();
     } else {
         return b;
     }
 }
 
-box icp_loop_with_nc_bt(box b, contractor const & ctc, SMTConfig & config) {
+box nra_solver::icp_loop_with_ncbt(box b, contractor const & ctc, SMTConfig & config) const {
     static unsigned prune_count = 0;
     stack<box> box_stack;
     stack<int> bisect_var_stack;
@@ -348,6 +364,7 @@ box icp_loop_with_nc_bt(box b, contractor const & ctc, SMTConfig & config) {
         b = box_stack.top();
         try {
             b = ctc.prune(b, config);
+            if (config.nra_stat) { m_stat.increase_prune(); }
         } catch (contractor_exception & e) {
             // Do nothing
         }
@@ -356,10 +373,11 @@ box icp_loop_with_nc_bt(box b, contractor const & ctc, SMTConfig & config) {
         bisect_var_stack.pop();
         if (!b.is_empty()) {
             // SAT
-            if (b.max_diam() > config.nra_precision) {
-              config.inc_icp_decisions();
-                tuple<int, box, box> splits = b.bisect();
-                unsigned const index = get<0>(splits);
+            tuple<int, box, box> splits = b.bisect(config.nra_precision);
+            if (config.nra_stat) { m_stat.increase_branch(); }
+            int const index = get<0>(splits);
+            if (index >= 0) {
+                config.inc_icp_decisions();
                 box const & first    = get<1>(splits);
                 box const & second   = get<2>(splits);
                 if (second.is_bisectable()) {
@@ -394,10 +412,24 @@ box icp_loop_with_nc_bt(box b, contractor const & ctc, SMTConfig & config) {
     return b;
 }
 
+void nra_solver::output_solution(box const & b, unsigned i) const {
+    if (i > 0) {
+        cout << i << "-th ";
+    }
+    cout << "Solution:" << endl;
+    cout << b << endl;
+    if (!config.nra_model_out.is_open()) {
+        config.nra_model_out.open(config.nra_model_out_name.c_str(), std::ofstream::out | std::ofstream::trunc);
+        if (config.nra_model_out.fail()) {
+            cout << "Cannot create a file: " << config.nra_model_out_name << endl;
+            exit(1);
+        }
+    }
+    display(config.nra_model_out, b, false, true);
+}
+
 void nra_solver::handle_sat_case(box const & b) const {
     // SAT
-    DREAL_LOG_FATAL << "Solution:";
-    DREAL_LOG_FATAL << b;
     // --proof option
     if (config.nra_proof) {
         config.nra_proof_out.close();
@@ -405,13 +437,9 @@ void nra_solver::handle_sat_case(box const & b) const {
         display(config.nra_proof_out, b, !config.nra_readable_proof, true);
     }
     // --model option
-    if (config.nra_model) {
-        config.nra_model_out.open(config.nra_model_out_name.c_str(), std::ofstream::out | std::ofstream::trunc);
-        if (config.nra_model_out.fail()) {
-            cout << "Cannot create a file: " << config.nra_model_out_name << endl;
-            exit(1);
-        }
-        display(config.nra_model_out, b, false, true);
+    if (config.nra_model && config.nra_multiple_soln == 1) {
+        // Only output here when --multiple_soln is not used
+        output_solution(b);
     }
 #ifdef SUPPORT_ODE
     // --visualize option
@@ -468,15 +496,22 @@ bool nra_solver::check(bool complete) {
     if (m_stack.size() == 0) { return true; }
     DREAL_LOG_INFO << "nra_solver::check(complete = " << boolalpha << complete << ")"
                    << "stack size = " << m_stack.size();
-    double const prec = config.nra_precision;
     m_ctc = build_contractor(m_box, m_stack, complete);
-    try {
-        m_box = m_ctc.prune(m_box, config);
-    } catch (contractor_exception & e) {
-        // Do nothing
-    }
-    if (!m_box.is_empty() && m_box.max_diam() > prec && complete) {
-        m_box = icp_loop(m_box, m_ctc, config);
+    if (complete) {
+        // Complete Check ==> Run ICP
+        if (config.nra_ncbt) {
+            m_box = icp_loop_with_ncbt(m_box, m_ctc, config);
+        } else {
+            m_box = icp_loop(m_box, m_ctc, config);
+        }
+    } else {
+        // Incomplete Check ==> Prune Only
+        try {
+            m_box = m_ctc.prune(m_box, config);
+            if (config.nra_stat) { m_stat.increase_prune(); }
+        } catch (contractor_exception & e) {
+            // Do nothing
+        }
     }
     bool result = !m_box.is_empty();
     DREAL_LOG_INFO << "nra_solver::check: result = " << boolalpha << result;

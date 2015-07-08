@@ -197,7 +197,7 @@ OpenSMTContext::executeCommands( )
     return 2;
 
   // Trick for efficiency
-  if ( nof_checksat == 1 )
+  if ( config.incremental == 0 && nof_checksat == 1 )
     ret_val = executeStatic( );
   // Normal incremental solving
   else
@@ -603,6 +603,20 @@ void OpenSMTContext::DeclareFun( const char * name, Snode * s )
   egraph.newSymbol( name, s );
 }
 
+void OpenSMTContext::DeclareFun( const char * name, Snode * s, const char * p )
+{
+  if ( config.verbosity > 1 )
+    cerr << "# OpenSMTContext::Declaring function "
+         << name
+         << " of sort "
+         << s
+         << " with precision = "
+         << p
+         << endl;
+  double const vval = strtod(p, nullptr);
+  egraph.newSymbol( name, s, vval );
+}
+
 void OpenSMTContext::DefineODE( char const * name, vector<pair<string, Enode *> *> * odes)
 {
     dreal::flow _flow;
@@ -698,6 +712,20 @@ lbool OpenSMTContext::CheckSAT( )
 
   if ( config.verbosity > 1 )
     cerr << "# OpenSMTContext::Processing: " << formula << endl;
+
+  // Removes ITEs if there is any
+  if ( egraph.hasItes( ) )
+  {
+#ifdef PRODUCE_PROOF
+    if ( config.produce_inter > 0 )
+      opensmt_error( "Interpolation not supported for ite construct" );
+#endif
+    ExpandITEs expander( egraph, config );
+    formula = expander.doit( formula );
+
+    if ( config.dump_formula != 0 )
+      egraph.dumpToFile( "ite_expanded.smt2", formula );
+  }
 
   state = cnfizer.cnfizeAndGiveToSolver( formula );
   if ( state == l_Undef )

@@ -46,7 +46,7 @@ let get_network (singleton: Hybrid.t) =
 %token LB RB LC RC LP RP EQ PLUS MINUS AST SLASH COMMA COLON SEMICOLON
 %token AT LT LTE GT GTE IMPLY DDT CARET NOT
 %token SIN COS TAN
-%token ASIN ACOS ATAN
+%token ASIN ACOS ATAN ATAN2 MIN MAX
 %token SINH COSH TANH
 %token LOG EXP SQRT ABS
 %token MODE MACR INVT FLOW JUMP INIT GOAL IND TRUE FALSE TIME_PRECISION
@@ -167,6 +167,9 @@ exp:
  | ASIN LP exp RP         { Basic.Asin $3 }
  | ACOS LP exp RP         { Basic.Acos $3 }
  | ATAN LP exp RP         { Basic.Atan $3 }
+ | ATAN2 LP exp COMMA exp RP { Basic.Atan2 ($3, $5) }
+ | MIN  LP exp COMMA exp RP  { Basic.Min ($3, $5) }
+ | MAX  LP exp COMMA exp RP  { Basic.Max ($3, $5) }
  | SINH LP exp RP         { Basic.Sinh $3 }
  | COSH LP exp RP         { Basic.Cosh $3 }
  | TANH LP exp RP         { Basic.Tanh $3 }

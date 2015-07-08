@@ -50,15 +50,14 @@ using std::make_tuple;
 
 namespace dreal {
 box::box(std::vector<Enode *> const & vars)
-    : m_vars(vars), m_values(m_vars.size() == 0 ? 1 : m_vars.size()), m_domains(m_values.size()) {
+    : m_vars(vars), m_values(m_vars.size() == 0 ? 1 : m_vars.size()), m_domains(m_values.size()), m_precisions(m_values.size(), 0.0) {
     if (m_vars.size() > 0) {
         constructFromVariables(m_vars);
     }
 }
 
 box::box(std::vector<Enode *> const & vars, ibex::IntervalVector values)
-    : m_vars(vars), m_values(values), m_domains(values) { }
-
+    : m_vars(vars), m_values(values), m_domains(values), m_precisions(values.size(), 0.0) { }
 
 void box::constructFromVariables(vector<Enode *> const & vars) {
     DREAL_LOG_DEBUG << "box::constructFromVariables";
@@ -66,11 +65,15 @@ void box::constructFromVariables(vector<Enode *> const & vars) {
     // Construct ibex::IntervalVector
     m_values.resize(m_vars.size());
     m_domains.resize(m_vars.size());
+    m_precisions.resize(m_vars.size());
     unsigned num_var = m_vars.size();
     for (unsigned i = 0; i < num_var; i++) {
         Enode const * const e = m_vars[i];
         double const lb = e->getDomainLowerBound();
         double const ub = e->getDomainUpperBound();
+        if (e->hasPrecision()) {
+            m_precisions[i] = e->getPrecision();
+        }
         m_values[i] = ibex::Interval(lb, ub);
         m_domains[i] = ibex::Interval(lb, ub);
         m_name_index_map.emplace(e->getCar()->getName(), i);
@@ -106,6 +109,34 @@ ostream& display(ostream& out, ibex::Interval const & iv, bool const exact) {
     return out;
 }
 
+ostream& display_diff(ostream& out, box const & b1, box const & b2) {
+    if (b1 == b2) {
+        return out;
+    }
+    std::streamsize ss = out.precision();
+    out.precision(16);
+    assert(b1.size() == b2.size());
+    unsigned const s = b1.size();
+    for (unsigned i = 0; i < s; i++) {
+        Enode * e1 = b1.m_vars[i];
+        assert(e1 == b2.m_vars[i]);
+        ibex::Interval const & v1 = b1.m_values[i];
+        ibex::Interval const & d1 = b1.m_domains[i];
+        ibex::Interval const & v2 = b2.m_values[i];
+        ibex::Interval const & d2 = b2.m_domains[i];
+        assert(d1 == d2);
+        if (v1 != v2) {
+            out << e1->getCar()->getName()
+                << " : ";
+            display(out, v1, false);
+            out << " => ";
+            display(out, v2, false);
+        }
+        out << endl;
+    }
+    out.precision(ss);
+    return out;
+}
 
 ostream& display(ostream& out, box const & b, bool const exact, bool const old_style) {
     std::streamsize ss = out.precision();
@@ -145,23 +176,30 @@ ostream& operator<<(ostream& out, box const & b) {
     return display(out, b);
 }
 
-tuple<int, box, box> box::bisect() const {
+tuple<int, box, box> box::bisect(double precision) const {
     // TODO(soonhok): implement other bisect policy
-    int index = 0;
+    int index = -1;
     double max_diam = numeric_limits<double>::min();
 
     for (int i = 0; i < m_values.size(); i++) {
         double current_diam = m_values[i].diam();
-        if (current_diam > max_diam && m_values[i].is_bisectable()) {
+        double ith_precision = m_precisions[i] == 0 ? precision : m_precisions[i];
+        if (current_diam > max_diam && current_diam > ith_precision && m_values[i].is_bisectable()) {
             index = i;
             max_diam = current_diam;
         }
     }
-    return bisect(index);
+
+    if (index == -1) {
+        // Fail to find a dimension to bisect
+        return make_tuple(-1, *this, *this);
+    } else {
+        return bisect_at(index);
+    }
 }
 
 // Bisect a box into two boxes by bisecting i-th interval.
-tuple<int, box, box> box::bisect(int i) const {
+tuple<int, box, box> box::bisect_at(int i) const {
     assert(0 <= i && i < m_values.size());
     box b1(*this);
     box b2(*this);

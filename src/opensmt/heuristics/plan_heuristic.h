@@ -74,15 +74,23 @@ private:
      }
 }
     
-    Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluents,Planner::LiteralSet& tinitialState);  
+    Planner::ExtendedMinimalState* populateStateFromStack(vector<double>& tinitialFluentsMin,
+							  vector<double>& tinitialFluentsMax,
+							  set<int>& tinitialState,
+							  map<int, set<int> > & startedActions);  
     int getColinHeuristic(int choice);
-    void getBooleansAtTime(int time, Planner::LiteralSet& booleans);
-    void getRealsAtTime(int time, vector<double>& reals);
-
+    void getBooleansAtTime(int time, set<int>& booleans);
+    void getStartedActions(int time, map<int, set<int> > & startedActions);
+    void getRealsAtTime(int time, vector<double>& realsMin, vector<double>& realsMax);
+    void initializeHeuristic();
     map<string, Literal*> colinLiterals;
     map<Enode*, Literal*> enodeToLiteral;
     vector<map<Literal*, Enode*>*> stepLiteralToEnode;
+    map<string, instantiatedOp*> colinActs;
+    map<Enode*, instantiatedOp*> enodeToAct;
+    vector<map<instantiatedOp*, Enode*>*> stepActToEnode;
     vector<map<int, string>*> pneAtTime;
+    vector<double> heuristicValueStack;
 #endif    
     
 
@@ -111,7 +119,9 @@ private:
     vector< map<string, Enode* >* > time_process_enodes;
     vector< map<string, Enode* >* > time_event_enodes;
     vector< map<string, Enode* >* > time_act_enodes;
+    vector< map<string, Enode* >* > time_act_sub_enodes;
     vector< map<string, Enode* >* > time_duract_enodes;
+    vector< map<string, Enode* >* > time_duract_sub_enodes;
     vector< map<string, Enode* >* > time_fact_enodes;
     vector< map<string, Enode* >* > time_fact_sub_enodes;
     vector< map<string, Enode* >* > time_func_enodes;

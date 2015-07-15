@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "opensmt/egraph/Egraph.h"
 #include "opensmt/tsolvers/TSolver.h"
 #include "util/box.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "contractor/contractor.h"
 #include "util/logging.h"
 #include "util/scoped_vec.h"
@@ -88,9 +88,6 @@ private:
     std::vector<constraint *> initialize_constraints();
     std::vector<Enode *> generate_explanation(scoped_vec<constraint const *> const & ctr_vec);
     void handle_sat_case(box const & b) const;
-    void output_solution(box const & b, unsigned i = 0) const;
     void handle_deduction();
-    box icp_loop(box b, contractor const & ctc, SMTConfig & config) const;
-    box icp_loop_with_ncbt(box b, contractor const & ctc, SMTConfig & config) const;
 };
 }  // namespace dreal

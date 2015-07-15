@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,6 +26,6 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "opensmt/egraph/Egraph.h"
 
 namespace dreal {
-ibex::ExprNode const * translate_enode_to_exprnode(unordered_map<string, ibex::Variable const> & var_map, Enode const * e);
-ibex::ExprCtr  const * translate_enode_to_exprctr(unordered_map<string, ibex::Variable const> & var_map, Enode const * e, lbool p = l_Undef);
+ibex::ExprNode const * translate_enode_to_exprnode(unordered_map<string, ibex::Variable const> & var_map, Enode * const e, std::unordered_map<Enode*, double> const & subst = std::unordered_map<Enode*, double>());
+ibex::ExprCtr  const * translate_enode_to_exprctr(unordered_map<string, ibex::Variable const> & var_map, Enode * const e, lbool p = l_Undef, std::unordered_map<Enode*, double> const & subst = std::unordered_map<Enode*, double>());
 }

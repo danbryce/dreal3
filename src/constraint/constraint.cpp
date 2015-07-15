@@ -24,11 +24,12 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <iterator>
 #include <unordered_map>
+#include <unordered_set>
 #include <initializer_list>
 #include <iostream>
 #include <utility>
 #include "opensmt/egraph/Enode.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "util/flow.h"
 #include "util/ibex_enode.h"
 #include "util/logging.h"
@@ -66,6 +67,9 @@ ostream & operator<<(ostream & out, constraint_type const & ty) {
         break;
     case constraint_type::Exists:
         out << "Exists";
+        break;
+    case constraint_type::GenericForall:
+        out << "GenericForall";
         break;
     }
     return out;
@@ -106,13 +110,13 @@ ostream & operator<<(ostream & out, constraint const & c) {
 // ====================================================
 // Nonlinear constraint
 // ====================================================
-nonlinear_constraint::nonlinear_constraint(Enode * const e, lbool p)
-    : constraint(constraint_type::Nonlinear, e), m_exprctr(nullptr), m_numctr(nullptr), m_numctr_ineq(nullptr) {
+nonlinear_constraint::nonlinear_constraint(Enode * const e, lbool p, std::unordered_map<Enode*, double> const & subst)
+    : constraint(constraint_type::Nonlinear, e), m_exprctr(nullptr), m_numctr(nullptr), m_numctr_ineq(nullptr), m_subst(subst) {
     unordered_map<string, ibex::Variable const> var_map;
     bool is_ineq = (p == l_False && e->isEq());
     p = is_ineq ? true : p;
 
-    m_exprctr = translate_enode_to_exprctr(var_map, e, p);
+    m_exprctr = translate_enode_to_exprctr(var_map, e, p, m_subst);
     assert(m_exprctr);
 
     m_var_array.resize(var_map.size());
@@ -130,7 +134,7 @@ nonlinear_constraint::nonlinear_constraint(Enode * const e, lbool p)
     DREAL_LOG_INFO << "nonlinear_constraint: "<< *this;
 }
 
-nonlinear_constraint::~nonlinear_constraint() {
+nonlinear_constraint::~nonlinear_constraint() noexcept {
     delete m_numctr;
     delete m_numctr_ineq;
     delete m_exprctr;
@@ -230,12 +234,17 @@ pair<lbool, ibex::Interval> nonlinear_constraint::eval(ibex::IntervalVector cons
 
 pair<lbool, ibex::Interval> nonlinear_constraint::eval(box const & b) const {
     // Construct iv from box b
-    ibex::IntervalVector iv(m_var_array.size());
-    for (int i = 0; i < m_var_array.size(); i++) {
-        iv[i] = b[m_var_array[i].name];
-        DREAL_LOG_DEBUG << m_var_array[i].name << " = " << iv[i];
+    if (m_var_array.size() > 0) {
+        ibex::IntervalVector iv(m_var_array.size());
+        for (int i = 0; i < m_var_array.size(); i++) {
+            iv[i] = b[m_var_array[i].name];
+            DREAL_LOG_DEBUG << m_var_array[i].name << " = " << iv[i];
+        }
+        return eval(iv);
+    } else {
+        ibex::IntervalVector iv(1);
+        return eval(iv);
     }
-    return eval(iv);
 }
 
 // ====================================================
@@ -246,8 +255,6 @@ ode_constraint::ode_constraint(integral_constraint const & integral, vector<fora
     for (auto const & inv : invs) {
         copy(inv.get_enodes().begin(), inv.get_enodes().end(), back_inserter(m_enodes));
     }
-}
-ode_constraint::~ode_constraint() {
 }
 ostream & ode_constraint::display(ostream & out) const {
     out << "ode_constraint" << endl;
@@ -319,8 +326,6 @@ integral_constraint::integral_constraint(Enode * const e, unsigned const flow_id
       m_flow_id(flow_id), m_time_0(time_0), m_time_t(time_t),
       m_vars_0(vars_0), m_pars_0(pars_0), m_vars_t(vars_t), m_pars_t(pars_t),
       m_par_lhs_names(par_lhs_names), m_odes(odes) { }
-integral_constraint::~integral_constraint() {
-}
 ostream & integral_constraint::display(ostream & out) const {
     out << "integral_constraint = " << m_enodes[0] << endl;
     out << "\t" << "flow_id = " << m_flow_id << endl;
@@ -358,8 +363,6 @@ forallt_constraint mk_forallt_constraint(Enode * const e) {
 forallt_constraint::forallt_constraint(Enode * const e, unsigned const flow_id, Enode * const time_0, Enode * const time_t, Enode * const inv)
     : constraint(constraint_type::ForallT, e), m_flow_id(flow_id), m_time_0(time_0), m_time_t(time_t), m_inv(inv) {
 }
-forallt_constraint::~forallt_constraint() {
-}
 ostream & forallt_constraint::display(ostream & out) const {
     out << "forallt_constraint = " << m_enodes[0] << endl;
     out << "\t" << "flow_id = " << m_flow_id << endl;
@@ -372,78 +375,53 @@ ostream & forallt_constraint::display(ostream & out) const {
 // Forall constraint
 // ====================================================
 forall_constraint::forall_constraint(Enode * const e, lbool const p)
-    : constraint(constraint_type::Forall, e) {
-    cerr << "forall_constraint : " << e << endl;
-    Enode * const formula = e->get1st();
-    Enode * const vars = e->getCdr()->getCdr();
-
-    if (formula->isAnd()) {
-        Enode * elist = formula->getCdr();
-        while (!elist->isEnil()) {
-            Enode * head = elist->getCar();
-            lbool head_p = p;
-            if (head->isNot()) {
-                head = head->get1st();
-                head_p = head_p == l_True ? l_False : l_True;
-            }
-            cerr << "add: " << head << " : " << (head_p == l_True) << endl;
-            m_ctrs.emplace_back(head, head_p);
-            elist = elist->getCdr();
-        }
-    }
-    cerr << "formula = " << formula << endl;
-    cerr << "vars    = " << vars << endl;
-    cerr << "polarity= " << (p == l_True) << endl;
-    cerr << *this << endl;;
-    cerr << "===============" << endl;
+    : constraint(constraint_type::Forall, e), m_forall_vars(e->get_forall_vars()), m_polarity(p) {
 }
-forall_constraint::~forall_constraint() {
+unordered_set<Enode *> forall_constraint::get_forall_vars() const {
+    return m_forall_vars;
 }
 ostream & forall_constraint::display(ostream & out) const {
-    out << "forall_constraint = " << m_enodes[0] << endl;
-    out << "display!" << m_ctrs.size() << endl;
-    for (constraint const & ctr : m_ctrs) {
-        out << "\t" << ctr << endl;
+    out << "forall_constraint = "
+        << (m_polarity == l_True ? "" : "!")
+        << m_enodes[0] << endl;
+    for (Enode * const var : m_forall_vars) {
+        out << "quantified var = " << var << endl;
     }
     return out;
 }
 
 // ====================================================
-// Exists constraint
+// Generic Forall constraint
 // ====================================================
-exists_constraint::exists_constraint(Enode * const e, lbool const p)
-    : constraint(constraint_type::Exists, e) {
-    cerr << "exists_constraint" << endl;
-    Enode * const formula = e->get1st();
-    Enode * const vars = e->getCdr()->getCdr();
-    cerr << "formula = " << formula << endl;
-    cerr << "vars    = " << vars << endl;
-    cerr << "polarity= " << (p == l_True) << endl;
-    cerr << *this << endl;;
-    cerr << "===============" << endl;
-}
-exists_constraint::~exists_constraint() {
-}
-ostream & exists_constraint::display(ostream & out) const {
-    out << "exists_constraint = " << m_enodes[0] << endl;
-    for (constraint const & ctr : m_ctrs) {
-        out << "\t" << ctr << endl;
+unordered_set<Enode *> generic_forall_constraint::extract_forall_vars(Enode const * elist) {
+    unordered_set<Enode *> ret;
+    while (!elist->isEnil()) {
+        ret.insert(elist->getCar());
+        elist = elist->getCdr();
     }
+    return ret;
+}
+
+generic_forall_constraint::generic_forall_constraint(Enode * const e, lbool const p)
+    : constraint(constraint_type::GenericForall, e),
+      m_forall_vars(extract_forall_vars(e->getCdr()->getCdr())),
+      m_body(e->getCdr()->getCar()),
+      m_polarity(p) {
+}
+unordered_set<Enode *> generic_forall_constraint::get_forall_vars() const {
+    return m_forall_vars;
+}
+Enode * generic_forall_constraint::get_body() const {
+    return m_body;
+}
+ostream & generic_forall_constraint::display(ostream & out) const {
+    out << "generic_forall([ ";
+    for (Enode * const var : m_forall_vars) {
+        out << var << " ";
+    }
+    out << "], "
+        << (m_polarity == l_True ? "" : "!")
+        << get_enode() << ")" << endl;
     return out;
 }
-
-constraint * mk_quantified_constraint(Enode * const e, lbool const p) {
-    assert(e);
-    DREAL_LOG_INFO << "mk_quantified_constraint: " << e;
-    assert(e->isForall() || e->isExists());
-    assert(p == l_True || p == l_False);
-    if ((e->isForall() && p == l_True) || (e->isExists() && p == l_False)) {
-        return new forall_constraint(e, p);
-    } else {
-        assert((e->isExists() && p == l_True) || (e->isForall() && p == l_False));
-        return new exists_constraint(e, p);
-    }
-    return nullptr;
-}
-
 }  // namespace dreal

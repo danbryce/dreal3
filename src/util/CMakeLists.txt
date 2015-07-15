@@ -7,13 +7,14 @@ configure_file("${DREAL_SOURCE_DIR}/util/git_sha1.cpp.in" "${DREAL_BINARY_DIR}/g
 
 SET(DREAL_SRCS ${DREAL_SRCS}
   ${CMAKE_CURRENT_LIST_DIR}/box.cpp
-  ${CMAKE_CURRENT_LIST_DIR}/constraint.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/cxx11_check.cpp
   ${CMAKE_CURRENT_LIST_DIR}/flow.cpp
   ${CMAKE_CURRENT_LIST_DIR}/hexfloat.cpp
   ${CMAKE_CURRENT_LIST_DIR}/ibex_enode.cpp
   ${CMAKE_CURRENT_LIST_DIR}/proof.cpp
   ${CMAKE_CURRENT_LIST_DIR}/stat.cpp
   ${CMAKE_CURRENT_LIST_DIR}/string.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/subst_enode.cpp
   "${DREAL_BINARY_DIR}/git_sha1.cpp"
   ${CMAKE_CURRENT_LIST_DIR}/git_sha1.h
   PARENT_SCOPE

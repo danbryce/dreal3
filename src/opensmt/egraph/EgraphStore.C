@@ -17,12 +17,16 @@ You should have received a copy of the GNU General Public License
 along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
+#include <sstream>
 #include "egraph/Egraph.h"
 #include "common/LA.h"
 #include "simplifiers/BVNormalize.h"
 #include "simplifiers/BVBooleanize.h"
 #include "smtsolvers/SimpSMTSolver.h"
 #include "version.h"
+
+using std::ostringstream;
+using std::stod;
 
 void Egraph::initializeStore( )
 {
@@ -608,9 +612,9 @@ Enode * Egraph::mkNum( const char * num, const char * den )
 //   Real real_value( s.c_str() );
 //   return mkNum( const_cast< char * >(real_value.get_str( ).c_str( )) );
 // #else
-  double num_d = atof( num );
-  double den_d = atof( den );
-  double value = num_d / den_d;
+  double const num_d = stod( num );
+  double const den_d = stod( den );
+  double const value = num_d / den_d;
   return mkNum( value );
 }
 
@@ -620,7 +624,7 @@ Enode * Egraph::mkFun( const char * name, Enode * args )
   //
   // Retrieve sort from arguments
   //
-  stringstream ss;
+  ostringstream ss;
   ss << name;
   for ( Enode * l = args ; !l->isEnil( ) ; l = l->getCdr( ) )
   {
@@ -644,7 +648,7 @@ Enode * Egraph::newSymbol( const char * name, Snode * s , double p )
   assert( s );
   assert( s->isTerm( ) );
 
-  stringstream ss;
+  ostringstream ss;
   ss << name;
   const string args = s->getArgs( );
   if ( args != "" ) ss << " " << args;
@@ -3003,7 +3007,7 @@ void Egraph::printEnodeList( ostream & os )
     if( e->isSymb( ) || e->isNumb( ) || e->isDef( ) )
     {
       // Print index formatted
-      stringstream tmp; tmp << i;
+      ostringstream tmp; tmp << i;
       os << "# ";
       for ( int j = 3 - tmp.str( ).size( ) ; j >= 0 ; j -- ) os << " ";
       os << tmp.str( ) << " | ";
@@ -3021,7 +3025,7 @@ void Egraph::printEnodeList( ostream & os )
     if( e->isTerm( ) )
     {
       // Print index formatted
-      stringstream tmp; tmp << i;
+      ostringstream tmp; tmp << i;
       os << "# ";
       for ( int j = 3 - tmp.str( ).size( ) ; j >= 0 ; j -- ) os << " ";
       os << tmp.str( ) << " | ";
@@ -3039,7 +3043,7 @@ void Egraph::printEnodeList( ostream & os )
     if( e->isList( ) )
     {
       // Print index formatted
-      stringstream tmp; tmp << i;
+      ostringstream tmp; tmp << i;
       os << "# ";
       for ( int j = 3 - tmp.str( ).size( ) ; j >= 0 ; j -- ) os << " ";
       os << tmp.str( ) << " | ";
@@ -3192,7 +3196,7 @@ Enode * Egraph::mkForallT             ( Enode * mode, Enode * lb, Enode * rb, En
   return res;
 }
 
-Enode * Egraph::mkIntegral             ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, char * flowname )
+Enode * Egraph::mkIntegral             ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, const char * flowname )
 {
   assert( time_0 );
   assert( time_t );
@@ -3232,8 +3236,11 @@ Enode * Egraph::mkForall ( vector<pair<string, Snode *>*>* sorted_var_list, Enod
     assert(sorted_var_list);
     std::reverse(sorted_var_list->begin(), sorted_var_list->end());
     Enode * elist = const_cast< Enode * >( enil );
-    for (pair<string, Snode *> * const sorted_var : *sorted_var_list) {
-        elist = cons(mkVar((*sorted_var).first.c_str()), elist);
+    for (pair<string, Snode *> * sorted_var : *sorted_var_list) {
+        pair<string, Snode *> p = *sorted_var;
+        string const & name = p.first;
+        elist = cons(mkVar(name.c_str()), elist);
+        delete sorted_var;
     }
     Enode * res = cons(id_to_enode[ ENODE_ID_FORALL ], cons(e, elist));
     assert (res);
@@ -3245,6 +3252,7 @@ Enode * Egraph::mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enod
     Enode * elist = const_cast< Enode * >( enil );
     for (pair<string, Snode *> * const sorted_var : *sorted_var_list) {
         elist = cons(mkVar((*sorted_var).first.c_str()), elist);
+        delete sorted_var;
     }
     Enode * res = cons(id_to_enode[ ENODE_ID_EXISTS ], cons(e, elist));
     assert (res);

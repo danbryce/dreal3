@@ -35,7 +35,8 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 
 namespace dreal {
 
-enum class constraint_type { Nonlinear, ODE, Integral, ForallT, Forall, Exists };
+enum class constraint_type { Nonlinear, ODE, Integral, ForallT,
+Forall, Exists, GenericForall };
 std::ostream & operator<<(std::ostream & out, constraint_type const & ty);
 
 class constraint {
@@ -53,7 +54,7 @@ public:
     inline std::vector<Enode *> const & get_enodes() const { return m_enodes; }
     inline std::unordered_set<Enode *> const & get_vars() const { return m_vars; }
     virtual std::ostream & display(std::ostream & out) const = 0;
-    virtual ~constraint() { }
+    virtual ~constraint() noexcept { }
     friend std::ostream & operator<<(std::ostream & out, constraint const & c);
 };
 
@@ -61,15 +62,17 @@ std::ostream & operator<<(ostream & out, constraint const & c);
 
 class nonlinear_constraint : public constraint {
 private:
-    ibex::ExprCtr const * m_exprctr;
-    ibex::NumConstraint const * m_numctr;
-    ibex::NumConstraint const * m_numctr_ineq;
-    ibex::Array<ibex::ExprSymbol const> m_var_array;
+    ibex::ExprCtr const *                    m_exprctr;
+    ibex::NumConstraint const *              m_numctr;
+    ibex::NumConstraint const *              m_numctr_ineq;
+    ibex::Array<ibex::ExprSymbol const>      m_var_array;
+    std::unordered_map<Enode*, double> const m_subst;
+
     std::pair<lbool, ibex::Interval> eval(ibex::IntervalVector const & iv) const;
 
 public:
-    explicit nonlinear_constraint(Enode * const e, lbool p = l_Undef);
-    virtual ~nonlinear_constraint();
+    explicit nonlinear_constraint(Enode * const e, lbool p = l_Undef, std::unordered_map<Enode*, double> const & subst = std::unordered_map<Enode *, double>());
+    virtual ~nonlinear_constraint() noexcept;
     virtual std::ostream & display(std::ostream & out) const;
     std::pair<lbool, ibex::Interval> eval(box const & b) const;
     inline ibex::ExprCtr const * get_exprctr() const { return m_exprctr; }
@@ -106,7 +109,6 @@ public:
                         std::vector<Enode *> const & vars_t, std::vector<Enode *> const & pars_t,
                         std::vector<string>  const & par_lhs_names,
                         std::vector<std::pair<std::string, Enode *>> const & odes);
-    virtual ~integral_constraint();
     virtual std::ostream & display(std::ostream & out) const;
 };
 
@@ -126,7 +128,6 @@ public:
     inline Enode * get_inv()    const { return m_inv; }
     explicit forallt_constraint(Enode * e);
     forallt_constraint(Enode * const e, unsigned const flow_id, Enode * const time_0, Enode * const time_t, Enode * const inv);
-    virtual ~forallt_constraint();
     virtual std::ostream & display(std::ostream & out) const;
 };
 
@@ -141,30 +142,50 @@ public:
     ode_constraint(integral_constraint const & integral, std::vector<forallt_constraint> const & invs);
     inline integral_constraint const & get_ic() const { return m_int; }
     inline std::vector<forallt_constraint> const & get_invs() const { return m_invs; }
-    virtual ~ode_constraint();
     virtual std::ostream & display(std::ostream & out) const;
 };
 
+// This class is used to implement ad-hoc support for exist-forall
+// cases. During variable declarations, we define existentially
+// quantified variables X1 ... Xn and universally quantified variable
+// Y1 ... Ym. Then the reset of SMT2 file is assuming that we have a
+// prefix:
+//
+//     \exist X1 ... Xn \forall Y1 ... Ym
+//
+// and define the quantifier-free block of formula.
+//
+// forall_constraint is used to represent a theory literal which
+// includes universally quantified variables (it's picked up at
+// nra_solver::initialize_constraints method).
 class forall_constraint : public constraint {
 private:
-    std::vector<nonlinear_constraint> m_ctrs;
-    std::vector<Enode *> m_vars;
+    std::unordered_set<Enode *> const m_forall_vars;
+    lbool const                       m_polarity;
 public:
     forall_constraint(Enode * const e, lbool const p);
-    virtual ~forall_constraint();
     virtual std::ostream & display(std::ostream & out) const;
+    std::unordered_set<Enode *> get_forall_vars() const;
+    inline Enode * get_enode() const { return get_enodes()[0]; }
+    inline lbool get_polarity() const { return m_polarity; }
 };
 
-class exists_constraint : public constraint {
+// This class is to support forall quantifier without a hack.
+class generic_forall_constraint : public constraint {
 private:
-    std::vector<nonlinear_constraint> m_ctrs;
-    std::vector<Enode *> m_vars;
-public:
-    exists_constraint(Enode * const e, lbool const p);
-    virtual ~exists_constraint();
-    virtual std::ostream & display(std::ostream & out) const;
-};
+    std::unordered_set<Enode *> const m_forall_vars;
+    Enode * const                     m_body;
+    lbool const                       m_polarity;
 
-constraint * mk_quantified_constraint(Enode * const e, lbool const p);
+    std::unordered_set<Enode *> extract_forall_vars(Enode const * elist);
+
+public:
+    generic_forall_constraint(Enode * const e, lbool const p);
+    virtual std::ostream & display(std::ostream & out) const;
+    std::unordered_set<Enode *> get_forall_vars() const;
+    Enode * get_body() const;
+    inline Enode * get_enode() const { return get_enodes()[0]; }
+    inline lbool get_polarity() const { return m_polarity; }
+};
 
 }  // namespace dreal

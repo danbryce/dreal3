@@ -1,7 +1,5 @@
 /*********************************************************************
 Author: Soonho Kong <soonhok@cs.cmu.edu>
-        Sicun Gao <sicung@cs.cmu.edu>
-        Edmund Clarke <emc@cs.cmu.edu>
 
 dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
@@ -23,6 +21,8 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "./config.h"
 #include "contractor/contractor_basic.h"
 #include "contractor/contractor_ibex.h"
+#include "contractor/contractor_forall.h"
+#include "contractor/contractor_generic_forall.h"
 #ifdef SUPPORT_ODE
 #include "contractor/contractor_capd4.h"
 #endif

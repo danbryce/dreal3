@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <fpu_control.h>
 #endif
 
-using std::stringstream;
+using std::ostringstream;
 
 namespace opensmt {
 
@@ -66,7 +66,7 @@ int main( int argc, const char * argv[] )
   START_EASYLOGGINGPP(argc, argv);
 #endif
   // Set up version, usage message
-  stringstream ss;
+  ostringstream ss;
   ss << PACKAGE_VERSION
      << " (commit " << string(dreal::getGitSHA1()).substr(0, 12) << ")";
 

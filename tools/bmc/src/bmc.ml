@@ -1382,6 +1382,7 @@ let trans n aut i k heuristic ia =
 
 				  (* Add noop transition *)
 				  let jmn = (*(mk_noop aut modeobj)::*)jm in
+				  
 				  List.map (fun j -> (modeobj, Jump.label j, getMode (Jump.target j), j)) jmn
 				end
 			       ) 

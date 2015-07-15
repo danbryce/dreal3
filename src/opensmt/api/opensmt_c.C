@@ -19,6 +19,9 @@ You should have received a copy of the GNU General Public License
 along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
+#include <string>
+#include <limits>
+#include <utility>
 #include "api/opensmt_c.h"
 #include "api/OpenSMTContext.h"
 #include "egraph/Egraph.h"
@@ -26,6 +29,10 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include "smtsolvers/SimpSMTSolver.h"
 #include "version.h"
 #include "util/logging.h"
+
+using std::string;
+using std::numeric_limits;
+using std::pair;
 
 #ifndef SMTCOMP
 
@@ -38,6 +45,12 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 // Communication APIs
 //
 void opensmt_init() {
+    static bool already_init = false;
+    if (!already_init) {
+        const char * argv[] = {};
+        START_EASYLOGGINGPP(0, argv);
+        already_init = true;
+    }
 }
 
 void opensmt_set_verbosity( opensmt_context c, int v )
@@ -246,6 +259,42 @@ void opensmt_print_interpolant( opensmt_context
 //
 // Formula construction APIs
 //
+
+void opensmt_define_ode( opensmt_context c, const char * flowname, opensmt_expr * vars, opensmt_expr * rhses, unsigned n)
+{
+  assert( c );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  vector<pair<string, Enode *> *> odes;
+  for (unsigned i = 0; i < n; i++) {
+      Enode * var = static_cast<Enode *>(vars[i]);
+      Enode * rhs = static_cast<Enode *>(rhses[i]);
+      odes.push_back(new pair<string, Enode*>(var->getCar()->getName(), rhs));
+  }
+  context.DefineODE(flowname, &odes);
+}
+
+opensmt_expr opensmt_mk_integral ( opensmt_context c, opensmt_expr * vars_t,
+                                   opensmt_expr time_l, opensmt_expr time_u,
+                                   opensmt_expr * vars_0, unsigned n,
+                                   const char * flowname) {
+  assert( c );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  list< Enode * > args_t, args_0;
+  for ( unsigned i = 0 ; i < n ; i ++ ) {
+    Enode * arg_t = static_cast< Enode * >( vars_t[ i ] );
+    Enode * arg_0 = static_cast< Enode * >( vars_0[ i ] );
+    args_t.push_back( arg_t );
+    args_0.push_back( arg_0 );
+  }
+  Enode * args_list_t = context.mkCons( args_t );
+  Enode * args_list_0 = context.mkCons( args_0 );
+  Enode * res = context.mkIntegral(static_cast<Enode*>(time_l), static_cast<Enode*>(time_u),
+                                   args_list_0, args_list_t, flowname);
+  return static_cast< void * >( res );
+}
+
 opensmt_expr opensmt_mk_true( opensmt_context c )
 {
   assert( c );
@@ -292,6 +341,34 @@ opensmt_expr opensmt_mk_int_var( opensmt_context c, char const * s , long lb, lo
   return static_cast< void * >( res );
 }
 
+opensmt_expr opensmt_mk_unbounded_int_var( opensmt_context c, char const * s)
+{
+  return opensmt_mk_int_var(c, s, numeric_limits<long>::lowest(), numeric_limits<long>::max());
+}
+
+opensmt_expr opensmt_mk_forall_int_var( opensmt_context c, char const * s , long lb, long ub)
+{
+  assert( c );
+  assert( s );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  Snode * sort = context.mkSortInt( );
+  context.DeclareFun( s, sort );
+  Enode * res = context.mkVar( s, true );
+  res->setDomainLowerBound(lb);
+  res->setDomainUpperBound(ub);
+  res->setValueLowerBound(lb);
+  res->setValueUpperBound(ub);
+  res->setForallVar();
+  return static_cast< void * >( res );
+}
+
+opensmt_expr opensmt_mk_forall_unbounded_int_var( opensmt_context c, char const * s)
+{
+  return opensmt_mk_int_var(c, s, numeric_limits<long>::lowest(), numeric_limits<long>::max());
+}
+
+
 opensmt_expr opensmt_mk_real_var( opensmt_context c, char const * s , double lb, double ub)
 {
   assert( c );
@@ -305,6 +382,51 @@ opensmt_expr opensmt_mk_real_var( opensmt_context c, char const * s , double lb,
   res->setDomainUpperBound(ub);
   res->setValueLowerBound(lb);
   res->setValueUpperBound(ub);
+  return static_cast< void * >( res );
+}
+
+opensmt_expr opensmt_mk_unbounded_real_var( opensmt_context c, char const * s)
+{
+  return opensmt_mk_real_var(c, s, numeric_limits<double>::lowest(), numeric_limits<double>::max());
+}
+
+opensmt_expr opensmt_mk_forall_real_var( opensmt_context c, char const * s , double lb, double ub)
+{
+  assert( c );
+  assert( s );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  Snode * sort = context.mkSortReal( );
+  context.DeclareFun( s, sort );
+  Enode * res = context.mkVar( s, true );
+  res->setDomainLowerBound(lb);
+  res->setDomainUpperBound(ub);
+  res->setValueLowerBound(lb);
+  res->setValueUpperBound(ub);
+  res->setForallVar();
+  return static_cast< void * >( res );
+}
+
+opensmt_expr opensmt_mk_forall_unbounded_real_var( opensmt_context c, char const * s)
+{
+  return opensmt_mk_real_var(c, s, numeric_limits<double>::lowest(), numeric_limits<double>::max());
+}
+
+opensmt_expr opensmt_mk_forall( opensmt_context c, opensmt_expr * varlist, unsigned n, opensmt_expr body ) {
+  assert( c );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  vector<pair<string, Snode *>*>* sorted_var_list = new vector<pair<string, Snode *>*>();
+  for (unsigned i = 0; i < n; ++i) {
+      opensmt_expr var = varlist[i];
+      Enode * e = static_cast<Enode*>(var);
+      Snode * sort = e->getSort();
+      string name = e->getCar()->getName();
+      sorted_var_list->push_back(new pair<string, Snode *>(name, sort));
+  }
+  Enode * e_body = static_cast<Enode*>(body);
+  Enode * res = context.mkForall(sorted_var_list, e_body);
+  delete sorted_var_list;
   return static_cast< void * >( res );
 }
 
@@ -325,6 +447,18 @@ opensmt_expr opensmt_mk_or( opensmt_context c, opensmt_expr * expr_list, unsigne
   return static_cast< void * >( res );
 }
 
+opensmt_expr opensmt_mk_or_2( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2)
+{
+  opensmt_expr list[2] = {expr1, expr2};
+  return opensmt_mk_or(c, list, 2);
+}
+
+opensmt_expr opensmt_mk_or_3( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2, opensmt_expr expr3)
+{
+  opensmt_expr list[3] = {expr1, expr2, expr3};
+  return opensmt_mk_or(c, list, 3);
+}
+
 opensmt_expr opensmt_mk_and( opensmt_context c, opensmt_expr * expr_list, unsigned n )
 {
   assert( c );
@@ -340,6 +474,18 @@ opensmt_expr opensmt_mk_and( opensmt_context c, opensmt_expr * expr_list, unsign
   Enode * args_list = context.mkCons( args );
   Enode * res = context.mkAnd( args_list );
   return static_cast< void * >( res );
+}
+
+opensmt_expr opensmt_mk_and_2( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2)
+{
+  opensmt_expr list[2] = {expr1, expr2};
+  return opensmt_mk_and(c, list, 2);
+}
+
+opensmt_expr opensmt_mk_and_3( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2, opensmt_expr expr3)
+{
+  opensmt_expr list[3] = {expr1, expr2, expr3};
+  return opensmt_mk_and(c, list, 3);
 }
 
 opensmt_expr opensmt_mk_eq ( opensmt_context c, opensmt_expr x, opensmt_expr y )
@@ -409,6 +555,18 @@ opensmt_expr opensmt_mk_plus( opensmt_context c, opensmt_expr * expr_list, unsig
   return static_cast< void * >( res );
 }
 
+opensmt_expr opensmt_mk_plus_2( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2)
+{
+  opensmt_expr list[2] = {expr1, expr2};
+  return opensmt_mk_plus(c, list, 2);
+}
+
+opensmt_expr opensmt_mk_plus_3( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2, opensmt_expr expr3)
+{
+  opensmt_expr list[3] = {expr1, expr2, expr3};
+  return opensmt_mk_plus(c, list, 3);
+}
+
 opensmt_expr opensmt_mk_minus( opensmt_context c, opensmt_expr x, opensmt_expr y )
 {
   OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
@@ -416,6 +574,15 @@ opensmt_expr opensmt_mk_minus( opensmt_context c, opensmt_expr x, opensmt_expr y
   Enode * args_list = context.mkCons( static_cast< Enode * >( x )
                     , context.mkCons( static_cast< Enode * >( y ) ) );
   Enode * res = context.mkMinus( args_list );
+  return static_cast< void * >( res );
+}
+
+opensmt_expr opensmt_mk_uminus( opensmt_context c, opensmt_expr arg)
+{
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  Enode * args_list = context.mkCons( static_cast< Enode * >( arg ) );
+  Enode * res = context.mkUminus( args_list );
   return static_cast< void * >( res );
 }
 
@@ -433,6 +600,19 @@ opensmt_expr opensmt_mk_times( opensmt_context c, opensmt_expr * expr_list, unsi
   Enode * res = context.mkTimes( args_list );
   return static_cast< void * >( res );
 }
+
+opensmt_expr opensmt_mk_times_2( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2)
+{
+  opensmt_expr list[2] = {expr1, expr2};
+  return opensmt_mk_times(c, list, 2);
+}
+
+opensmt_expr opensmt_mk_times_3( opensmt_context c, opensmt_expr expr1, opensmt_expr expr2, opensmt_expr expr3)
+{
+  opensmt_expr list[3] = {expr1, expr2, expr3};
+  return opensmt_mk_times(c, list, 3);
+}
+
 
 opensmt_expr opensmt_mk_div( opensmt_context c, opensmt_expr x, opensmt_expr y )
 {
@@ -996,6 +1176,93 @@ double opensmt_get_ub( opensmt_context c, opensmt_expr v )
   assert( context.getStatus( ) == l_True );
   Enode * var = static_cast< Enode * >( v );
   return var->getValueUpperBound();
+}
+double opensmt_get_bound_lb( opensmt_context c, opensmt_expr v )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  return var->getBoundLowerBound();
+}
+
+double opensmt_get_bound_ub( opensmt_context c, opensmt_expr v )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  return var->getBoundUpperBound();
+}
+
+void opensmt_set_bound_lb( opensmt_context c, opensmt_expr v, double n )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  var->setBoundLowerBound(n);
+}
+
+void opensmt_set_bound_ub( opensmt_context c, opensmt_expr v, double n )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  var->setBoundUpperBound(n);
+}
+
+double opensmt_get_domain_lb( opensmt_context c, opensmt_expr v )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  return var->getDomainLowerBound();
+}
+
+double opensmt_get_domain_ub( opensmt_context c, opensmt_expr v )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  return var->getDomainUpperBound();
+}
+
+void opensmt_set_domain_lb( opensmt_context c, opensmt_expr v, double n )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  var->setDomainLowerBound(n);
+}
+
+void opensmt_set_domain_ub( opensmt_context c, opensmt_expr v, double n )
+{
+  assert( c );
+  assert( v );
+  OpenSMTContext * c_ = static_cast< OpenSMTContext * >( c );
+  OpenSMTContext & context = *c_;
+  assert( context.getStatus( ) == l_True );
+  Enode * var = static_cast< Enode * >( v );
+  var->setDomainUpperBound(n);
 }
 
 /*

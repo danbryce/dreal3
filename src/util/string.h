@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ template<typename T>
 std::string join(T const & container, std::string const & sep) {
     auto it = begin(container);
     auto end_it = end(container);
-    std::stringstream ss;
+    std::ostringstream ss;
     ss << *(it++);
     for (; it != end_it; it++) {
         ss << sep << *it;

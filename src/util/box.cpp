@@ -50,20 +50,22 @@ using std::make_tuple;
 
 namespace dreal {
 box::box(std::vector<Enode *> const & vars)
-    : m_vars(vars), m_values(m_vars.size() == 0 ? 1 : m_vars.size()), m_domains(m_values.size()), m_precisions(m_values.size(), 0.0) {
+    : m_vars(vars), m_values(m_vars.size() == 0 ? 1 : m_vars.size()),
+      m_bounds(m_values.size()), m_domains(m_values.size()), m_precisions(m_values.size(), 0.0) {
     if (m_vars.size() > 0) {
         constructFromVariables(m_vars);
     }
 }
 
 box::box(std::vector<Enode *> const & vars, ibex::IntervalVector values)
-    : m_vars(vars), m_values(values), m_domains(values), m_precisions(values.size(), 0.0) { }
+    : m_vars(vars), m_values(values), m_bounds(values), m_domains(values), m_precisions(values.size(), 0.0) { }
 
 void box::constructFromVariables(vector<Enode *> const & vars) {
     DREAL_LOG_DEBUG << "box::constructFromVariables";
     m_vars = vars;
     // Construct ibex::IntervalVector
     m_values.resize(m_vars.size());
+    m_bounds.resize(m_vars.size());
     m_domains.resize(m_vars.size());
     m_precisions.resize(m_vars.size());
     unsigned num_var = m_vars.size();
@@ -75,6 +77,7 @@ void box::constructFromVariables(vector<Enode *> const & vars) {
             m_precisions[i] = e->getPrecision();
         }
         m_values[i] = ibex::Interval(lb, ub);
+        m_bounds[i] = ibex::Interval(lb, ub);
         m_domains[i] = ibex::Interval(lb, ub);
         m_name_index_map.emplace(e->getCar()->getName(), i);
     }
@@ -86,7 +89,7 @@ void box::constructFromLiterals(vector<Enode *> const & lit_vec) {
     // Construct a list of variables
     unordered_set<Enode *> var_set;
     for (auto const & lit : lit_vec) {
-        unordered_set<Enode *> const & temp_vars = lit->get_vars();
+        unordered_set<Enode *> const & temp_vars = lit->get_exist_vars();
         var_set.insert(temp_vars.begin(), temp_vars.end());
     }
     m_vars.clear();
@@ -97,6 +100,22 @@ void box::constructFromLiterals(vector<Enode *> const & lit_vec) {
               });
     constructFromVariables(m_vars);
     return;
+}
+
+box::box(box const & b, std::unordered_set<Enode *> const & extra_vars)
+    : m_vars(b.m_vars), m_values(m_vars.size() + extra_vars.size()),
+      m_bounds(m_values.size()), m_domains(m_values.size()), m_precisions(m_values.size(), 0.0) {
+    copy(extra_vars.begin(), extra_vars.end(), back_inserter(m_vars));
+    std::sort(m_vars.begin(), m_vars.end(),
+              [](Enode const * e1, Enode const * e2) {
+                  return e1->getCar()->getName() < e2->getCar()->getName();
+              });
+    if (m_vars.size() > 0) {
+        constructFromVariables(m_vars);
+        for (unsigned i = 0; i < b.m_vars.size(); i++) {
+            m_values[get_index(b.m_vars[i])] = b.m_values[i];
+        }
+    }
 }
 
 ostream& display(ostream& out, ibex::Interval const & iv, bool const exact) {
@@ -121,10 +140,12 @@ ostream& display_diff(ostream& out, box const & b1, box const & b2) {
         Enode * e1 = b1.m_vars[i];
         assert(e1 == b2.m_vars[i]);
         ibex::Interval const & v1 = b1.m_values[i];
-        ibex::Interval const & d1 = b1.m_domains[i];
         ibex::Interval const & v2 = b2.m_values[i];
+#ifdef DEBUG
+        ibex::Interval const & d1 = b1.m_domains[i];
         ibex::Interval const & d2 = b2.m_domains[i];
         assert(d1 == d2);
+#endif
         if (v1 != v2) {
             out << e1->getCar()->getName()
                 << " : ";
@@ -145,6 +166,9 @@ ostream& display(ostream& out, box const & b, bool const exact, bool const old_s
         out << "delta-sat with the following box:" << endl;
         unsigned const s = b.size();
         for (unsigned i = 0; i < s; i++) {
+            if (i != 0) {
+                out << endl;
+            }
             Enode * e = b.m_vars[i];
             string const & name = e->getCar()->getName();
             ibex::Interval const & v = b.m_values[i];
@@ -152,11 +176,13 @@ ostream& display(ostream& out, box const & b, bool const exact, bool const old_s
             if (i != (s - 1)) {
                 out << ";";
             }
-            out << endl;
         }
     } else {
         unsigned const s = b.size();
         for (unsigned i = 0; i < s; i++) {
+            if (i != 0) {
+                out << endl;
+            }
             Enode * e = b.m_vars[i];
             ibex::Interval const & v = b.m_values[i];
             ibex::Interval const & d = b.m_domains[i];
@@ -165,7 +191,6 @@ ostream& display(ostream& out, box const & b, bool const exact, bool const old_s
             display(out, d, exact);
             out << " = ";
             display(out, v, exact);
-            out << endl;
         }
     }
     out.precision(ss);
@@ -320,6 +345,56 @@ void box::assign_to_enode() const {
     for (unsigned i = 0; i < m_vars.size(); i++) {
         m_vars[i]->setValueLowerBound(m_values[i].lb());
         m_vars[i]->setValueUpperBound(m_values[i].ub());
+        m_vars[i]->setBoundLowerBound(m_values[i].lb());
+        m_vars[i]->setBoundUpperBound(m_values[i].ub());
+    }
+}
+
+void box::intersect(box const & b) {
+    m_values &= b.m_values;
+}
+void box::intersect(vector<box> const & vec) {
+    assert(vec.size() > 0);
+    for (box const & b : vec) {
+        this->intersect(b);
+    }
+}
+box intersect(box b1, box const & b2) {
+    b1.intersect(b2);
+    return b1;
+}
+box intersect(vector<box> const & vec) {
+    assert(vec.size() > 0);
+    box b = vec.front();
+    b.intersect(vec);
+    return b;
+}
+
+void box::hull(box const & b) {
+    m_values |= b.m_values;
+}
+void box::hull(vector<box> const & vec) {
+    assert(vec.size() > 0);
+    for (box const & b : vec) {
+        this->hull(b);
+    }
+}
+box hull(box b1, box const & b2) {
+    b1.hull(b2);
+    return b1;
+}
+box hull(vector<box> const & vec) {
+    assert(vec.size() > 0);
+    box b = vec.front();
+    b.hull(vec);
+    return b;
+}
+
+void box::adjust_bound(vector<box> const & box_stack) {
+    if (!is_empty() && box_stack.size() > 0) {
+        box bound(*this);
+        bound.hull(box_stack);
+        set_bounds(bound.get_values());
     }
 }
 }  // namespace dreal

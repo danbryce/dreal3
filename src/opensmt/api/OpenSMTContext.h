@@ -192,7 +192,7 @@ public:
   inline Enode * mkSqrt      ( Enode * e )       { assert(e); return egraph.mkSqrt(e);}
   inline Enode * mkSafeSqrt  ( Enode * e )       { assert(e); return egraph.mkSafeSqrt(e);}
   inline Enode * mkForallT   ( Enode * mode, Enode * lb, Enode * ub, Enode * e ) { assert(e); return egraph.mkForallT(mode, lb, ub, e);}
-  inline Enode * mkIntegral  ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, char * flowname ) {
+  inline Enode * mkIntegral  ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, const char * flowname ) {
       assert(time_0);
       assert(time_t);
       assert(vec_0);
@@ -278,7 +278,7 @@ public:
   inline void       setPolarityMode ( unsigned m ) { assert( m <= 6 ); config.sat_polarity_mode = m; }
   inline void       setVerbose(bool b) { config.nra_verbose = b; }
   inline void       setDebug(bool b) { config.nra_debug = b; }
-  inline void       setStat(bool b) { config.nra_stat = b; }
+  inline void       setStat(bool b) { config.nra_use_stat = b; }
 
 private:
 

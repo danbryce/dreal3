@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 project(DREAL C CXX)
 set(DREAL_VERSION_MAJOR 3)
 set(DREAL_VERSION_MINOR 15)
-set(DREAL_VERSION_PATCH 06.01)
+set(DREAL_VERSION_PATCH 07.01)
 set(PACKAGE_NAME dReal)
 set(PACKAGE_VERSION "${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}")
 set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
@@ -172,6 +172,13 @@ find_package(GIT REQUIRED)
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 
+# FindPythonLibs
+set(Python_ADDITIONAL_VERSIONS 2.7)
+find_package(PythonLibs 2.7)
+if(PYTHONLIBS_FOUND)
+  include_directories("${PYTHON_INCLUDE_DIR}")
+endif()
+
 function(JOIN VALUES GLUE OUTPUT)
   string (REGEX REPLACE "([^\\]|^);" "\\1${GLUE}" _TMP_STR "${VALUES}")
   string (REGEX REPLACE "[\\](.)" "\\1" _TMP_STR "${_TMP_STR}") #fixes escaping
@@ -293,6 +300,20 @@ ExternalProject_Add(CATCH
   INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/catch && cp -v single_include/catch.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/catch/)
 
 ################################################################
+# External: PEGTL (parsing)
+################################################################
+ExternalProject_Add(PEGTL
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/dreal-deps/PEGTL.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND echo "nothing to configure"
+  BUILD_COMMAND echo "nothing to build"
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include && cp -r -v pegtl.hh pegtl ${CMAKE_CURRENT_BINARY_DIR}/include/)
+
+################################################################
 # External: Easylogging++
 ################################################################
 ExternalProject_Add(EASYLOGGINGPP
@@ -402,27 +423,39 @@ ADD_CUSTOM_COMMAND(
 SET_SOURCE_FILES_PROPERTIES(${DREAL_BINARY_DIR}/opensmt/parsers/smt2/smt2parser.cc GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${DREAL_BINARY_DIR}/opensmt/parsers/smt2/smt2lexer.cc GENERATED)
 ################################################################
+add_subdirectory(icp)
 add_subdirectory(dsolvers)
 add_subdirectory(util)
+add_subdirectory(constraint)
 add_subdirectory(contractor)
+add_subdirectory(tools/dop)
 
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${DREAL_BINARY_DIR}/lib")
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${DREAL_BINARY_DIR}/lib")
 if(BUILD_SHARED_LIB)
   add_library(dreal SHARED ${DREAL_SRCS})
+  add_library(dop SHARED ${DOP_SRCS})
   if(APPLE)
     target_link_libraries(dreal ${EXTRA_LIBS})
+    target_link_libraries(dop ${PYTHON_LIBRARIES} ${EXTRA_LIBS})
   endif()
 else()
   add_library(dreal ${DREAL_SRCS})
+  add_library(dop ${DOP_SRCS})
 endif()
 
+add_dependencies(dop PEGTL)
+add_dependencies(dop IBEX)
+add_dependencies(dop EASYLOGGINGPP)
+add_dependencies(dop EZOPTIONPARSER)
+add_dependencies(dop JSON)
 add_dependencies(dreal IBEX)
 add_dependencies(dreal EASYLOGGINGPP)
 add_dependencies(dreal EZOPTIONPARSER)
 add_dependencies(dreal JSON)
 if(SUPPORT_ODE)
   add_dependencies(dreal CAPD4)
+  add_dependencies(dop CAPD4)
 endif()
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DREAL_EXTRA_LINKER_FLAGS} ${EXTERNAL_LD_FLAGS}")
@@ -432,6 +465,13 @@ add_executable(dReal-bin main.cpp)
 SET_TARGET_PROPERTIES(dReal-bin
   PROPERTIES OUTPUT_NAME dReal)
 target_link_libraries(dReal-bin dreal ${EXTRA_LIBS})
+
+if(NOT BUILD_STATIC_BIN)
+  add_executable(dOp-bin tools/dop/main.cpp)
+  SET_TARGET_PROPERTIES(dOp-bin
+    PROPERTIES OUTPUT_NAME dOp)
+  target_link_libraries(dOp-bin dop dreal ${PYTHON_LIBRARIES} ${EXTRA_LIBS})
+endif()
 
 #add tests
 add_subdirectory(tests/util)
@@ -449,25 +489,38 @@ endif()
 include(StyleCheck)
 file(GLOB_RECURSE DREAL_SOURCES
   ${DREAL_SOURCE_DIR}/contractor/*.cpp ${DREAL_SOURCE_DIR}/contractor/*.h
+  ${DREAL_SOURCE_DIR}/constraint/*.cpp ${DREAL_SOURCE_DIR}/constraint/*.h
   ${DREAL_SOURCE_DIR}/util/*.cpp       ${DREAL_SOURCE_DIR}/util/*.h
+  ${DREAL_SOURCE_DIR}/icp/*.cpp        ${DREAL_SOURCE_DIR}/icp/*.h
   ${DREAL_SOURCE_DIR}/dsolvers/*.cpp   ${DREAL_SOURCE_DIR}/dsolvers/*.h
   ${DREAL_SOURCE_DIR}/tests/*.cpp      ${DREAL_SOURCE_DIR}/tests/*.h
-  )
+  ${DREAL_SOURCE_DIR}/tools/dop/*.cpp  ${DREAL_SOURCE_DIR}/tools/dop/*.h)
 add_style_check_target(style "${DREAL_SOURCES}")
-add_test(NAME style_check COMMAND ${DREAL_SOURCE_DIR}/cmake/Modules/cpplint.py "--filter=-readability/casting,-whitespace/line_length,-build/header_guard,-whitespace/indent,-runtime/references,-build/c++11" ${DREAL_SOURCES})
+add_test(NAME style_check COMMAND ${DREAL_SOURCE_DIR}/cmake/Modules/cpplint.py "--filter=-readability/casting,-whitespace/line_length,-build/header_guard,-whitespace/indent,-runtime/references,-build/c++11,-runtime/int" ${DREAL_SOURCES})
 
 ADD_CUSTOM_COMMAND(TARGET dReal-bin
           POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E make_directory ${DREAL_SOURCE_DIR}/../bin
           COMMAND ${CMAKE_COMMAND} -E copy ${DREAL_BINARY_DIR}/dReal ${DREAL_SOURCE_DIR}/../bin/
 )
+if(NOT BUILD_STATIC_BIN)
+  ADD_CUSTOM_COMMAND(TARGET dOp-bin
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${DREAL_SOURCE_DIR}/../bin
+            COMMAND ${CMAKE_COMMAND} -E copy ${DREAL_BINARY_DIR}/dOp ${DREAL_SOURCE_DIR}/../bin/
+  )
+endif()
 
 #########################################
 # CPack
 #########################################
 set(CPACK_PACKAGE_NAME dReal)
 string(TOLOWER ${CMAKE_SYSTEM_NAME} LOWER_SYSTEM_NAME)
-set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}")
+if(BUILD_SHARED_LIB)
+  set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}-shared-libs")
+else()
+  set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}")
+endif()
 set(CPACK_STRIP_FILES TRUE)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   SET(CPACK_GENERATOR TGZ)
@@ -477,6 +530,9 @@ endif()
 include(CPack)
 
 install(TARGETS dReal-bin DESTINATION bin)
+if(NOT BUILD_STATIC_BIN)
+  install(TARGETS dOp-bin DESTINATION bin)
+endif()
 install(FILES ${DREAL_SOURCE_DIR}/../bin/dReach DESTINATION bin
   PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
               GROUP_READ GROUP_WRITE GROUP_EXECUTE
@@ -499,8 +555,7 @@ endif()
 add_custom_target(update_pkgs
   COMMAND echo "Update External Packages"
   COMMAND ${CMAKE_BUILD_TOOL}
-  DEPENDS update_clp update_filib update_ibex update_capd update_catch
-  update_easyloggingpp update_ezoptionparser update_json)
+  DEPENDS update_clp update_filib update_ibex update_capd update_catch update_pegtl update_easyloggingpp update_ezoptionparser update_json)
 
 add_custom_target(update_clp
   COMMAND git fetch --all && git reset --hard origin/master && make install -j
@@ -522,6 +577,10 @@ add_custom_target(update_capd
 add_custom_target(update_catch
   COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/catch && cp -v single_include/catch.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/catch/
   WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/CATCH)
+
+add_custom_target(update_pegtl
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include && cp -v -r pegtl.hh pegtl ${CMAKE_CURRENT_BINARY_DIR}/include/
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/PEGTL)
 
 add_custom_target(update_easyloggingpp
   COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp && cp -v src/easylogging++.h ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp/

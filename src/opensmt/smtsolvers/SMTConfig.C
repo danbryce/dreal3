@@ -31,6 +31,11 @@ INITIALIZE_EASYLOGGINGPP
 #endif
 
 using std::string;
+using std::endl;
+using std::cerr;
+using std::cout;
+using std::ofstream;
+using std::ostream;
 
 void
 SMTConfig::initializeConfig( )
@@ -96,7 +101,7 @@ SMTConfig::initializeConfig( )
   nra_precision                = 0.0;
   nra_verbose                  = false;
   nra_debug                    = false;
-  nra_stat                     = false;
+  nra_use_stat                 = false;
   nra_proof                    = false;
   nra_readable_proof           = false;
   nra_model                    = false;
@@ -120,7 +125,9 @@ SMTConfig::initializeConfig( )
   nra_polytope                 = false;
   nra_simp                     = true;
   nra_ncbt                     = false;
+  nra_worklist_fp              = false;
   nra_output_num_nodes         = false;
+  initLogging();
 }
 
 void SMTConfig::parseConfig ( char * f )
@@ -443,6 +450,9 @@ SMTConfig::parseCMDLine( int argc
             "use non-chronological backtracking in ICP loop",
             "--ncbt");
     opt.add("", false, 0, 0,
+            "use worklist fixpoint algorithm",
+            "--worklist-fp");
+    opt.add("", false, 0, 0,
             "read formula from standard input",
             "--in");
 
@@ -481,10 +491,11 @@ SMTConfig::parseCMDLine( int argc
     nra_verbose             = opt.isSet("--verbose") || opt.isSet("--debug");
     nra_debug               = opt.isSet("--debug");
 #endif
-    nra_stat                = opt.isSet("--stat");
+    nra_use_stat            = opt.isSet("--stat");
     nra_polytope            = opt.isSet("--polytope");
     nra_simp                = !opt.isSet("--no-simp");
     nra_ncbt                = opt.isSet("--ncbt");
+    nra_worklist_fp         = opt.isSet("--worklist-fp");
 
     // Extract Double Args
     if (opt.isSet("--precision")) { opt.get("--precision")->getDouble(nra_precision); }
@@ -583,14 +594,34 @@ SMTConfig::parseCMDLine( int argc
     }
 
     // logging
-    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Format, "%msg");
-    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToFile, "false");
+    initLogging();
     if (nra_debug) {
-        el::Loggers::setVerboseLevel(DREAL_DEBUG_LEVEL);
+        setVerbosityDebugLevel();
     } else if (nra_verbose) {
-        el::Loggers::setVerboseLevel(DREAL_INFO_LEVEL);
+        setVerbosityInfoLevel();
     } else {
-        el::Loggers::setVerboseLevel(DREAL_ERROR_LEVEL);
+        setVerbosityErrorLevel();
     }
     #endif
+}
+
+void SMTConfig::initLogging() {
+    static bool already_init = false;
+    if (!already_init) {
+        el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Format, "%msg");
+        el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToFile, "false");
+        already_init = true;
+    }
+}
+
+void SMTConfig::setVerbosityDebugLevel() {
+    el::Loggers::setVerboseLevel(DREAL_DEBUG_LEVEL);
+}
+
+void SMTConfig::setVerbosityInfoLevel() {
+    el::Loggers::setVerboseLevel(DREAL_INFO_LEVEL);
+}
+
+void SMTConfig::setVerbosityErrorLevel() {
+    el::Loggers::setVerboseLevel(DREAL_ERROR_LEVEL);
 }

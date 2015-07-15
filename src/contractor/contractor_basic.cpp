@@ -1,7 +1,5 @@
 /*********************************************************************
 Author: Soonho Kong <soonhok@cs.cmu.edu>
-        Sicun Gao <sicung@cs.cmu.edu>
-        Edmund Clarke <emc@cs.cmu.edu>
 
 dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
@@ -20,12 +18,15 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <queue>
+#include <random>
 #include <set>
 #include <sstream>
 #include <string>
@@ -33,11 +34,13 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <stack>
+#include <tuple>
 #include "contractor/contractor.h"
 #include "ibex/ibex.h"
 #include "opensmt/egraph/Enode.h"
 #include "util/box.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "util/logging.h"
 #include "util/proof.h"
 
@@ -47,23 +50,24 @@ using std::initializer_list;
 using std::make_shared;
 using std::queue;
 using std::set;
-using std::stringstream;
 using std::unordered_set;
 using std::vector;
+using std::ostream;
+using std::ostringstream;
 
 namespace dreal {
-std::ostream & operator<<(std::ostream & out, contractor_cell const & c) {
+ostream & operator<<(ostream & out, contractor_cell const & c) {
     return c.display(out);
 }
 
 contractor_seq::contractor_seq(initializer_list<contractor> const & l)
     : contractor_cell(contractor_kind::SEQ), m_vec(l) { }
 
-contractor_seq::contractor_seq(contractor const & c, std::vector<contractor> const & v)
+contractor_seq::contractor_seq(contractor const & c, vector<contractor> const & v)
     : contractor_cell(contractor_kind::SEQ), m_vec(1, c) {
     copy(v.begin(), v.end(), back_inserter(m_vec));
 }
-contractor_seq::contractor_seq(contractor const & c1, std::vector<contractor> const & v, contractor const & c2)
+contractor_seq::contractor_seq(contractor const & c1, vector<contractor> const & v, contractor const & c2)
     : contractor_cell(contractor_kind::SEQ), m_vec(1, c1) {
     copy(v.begin(), v.end(), back_inserter(m_vec));
     m_vec.push_back(c2);
@@ -178,28 +182,25 @@ contractor_fixpoint::contractor_fixpoint(function<bool(box const &, box const &)
     : contractor_cell(contractor_kind::FP), m_term_cond(term_cond), m_clist(clist) { }
 contractor_fixpoint::contractor_fixpoint(function<bool(box const &, box const &)> term_cond, vector<contractor> const & cvec)
     : contractor_cell(contractor_kind::FP), m_term_cond(term_cond), m_clist(cvec) { }
-contractor_fixpoint::contractor_fixpoint(function<bool(box const &, box const &)> term_cond,
-                                         vector<contractor> const & cvec1, vector<contractor> const & cvec2)
-    : contractor_cell(contractor_kind::FP), m_term_cond(term_cond), m_clist(cvec1) {
-    copy(cvec2.begin(), cvec2.end(), back_inserter(m_clist));
-}
-contractor_fixpoint::contractor_fixpoint(function<bool(box const &, box const &)> term_cond,
-                                         vector<contractor> const & cvec1,
-                                         vector<contractor> const & cvec2,
-                                         vector<contractor> const & cvec3)
-    : contractor_cell(contractor_kind::FP), m_term_cond(term_cond), m_clist(cvec1) {
-    copy(cvec2.begin(), cvec2.end(), back_inserter(m_clist));
-    copy(cvec3.begin(), cvec3.end(), back_inserter(m_clist));
+contractor_fixpoint::contractor_fixpoint(function<bool(box const &, box const &)> term_cond, initializer_list<vector<contractor>> const & cvec_list)
+    : contractor_cell(contractor_kind::FP), m_term_cond(term_cond), m_clist() {
+    for (auto const & cvec : cvec_list) {
+        copy(cvec.begin(), cvec.end(), back_inserter(m_clist));
+    }
 }
 
 box contractor_fixpoint::prune(box old_b, SMTConfig & config) const {
     DREAL_LOG_DEBUG << "contractor_fix::prune -- begin";
-    // TODO(soonhok): worklist_fixpoint still has a problem
-    box const & naive_result = naive_fixpoint_alg(old_b, config);
-    DREAL_LOG_DEBUG << "contractor_fix::prune -- end";
-    return naive_result;
-    // box const & worklist_result = worklist_fixpoint_alg(old_b, config);
-    // return worklist_result;
+    if (config.nra_worklist_fp) {
+        // TODO(soonhok): worklist_fixpoint still has a problem
+        box const & worklist_result = worklist_fixpoint_alg(old_b, config);
+        DREAL_LOG_DEBUG << "contractor_fix::prune -- end";
+        return worklist_result;
+    } else {
+        box const & naive_result = naive_fixpoint_alg(old_b, config);
+        DREAL_LOG_DEBUG << "contractor_fix::prune -- end";
+        return naive_result;
+    }
 }
 ostream & contractor_fixpoint::display(ostream & out) const {
     out << "contractor_fixpoint(";
@@ -339,7 +340,7 @@ box contractor_eval::prune(box b, SMTConfig & config) const {
         if (config.nra_proof) {
             box old_box = b;
             b.set_empty();
-            stringstream ss;
+            ostringstream ss;
             Enode const * const e = m_nl_ctr->get_enode();
             ss << (e->getPolarity() == l_False ? "!" : "") << e;
             output_pruning_step(config.nra_proof_out, old_box, b, config.nra_readable_proof, ss.str());
@@ -471,7 +472,6 @@ ostream & contractor_aggressive::display(ostream & out) const {
     return out;
 }
 
-
 contractor mk_contractor_seq(initializer_list<contractor> const & l) {
     return contractor(make_shared<contractor_seq>(l));
 }
@@ -499,15 +499,8 @@ contractor mk_contractor_fixpoint(function<bool(box const &, box const &)> guard
 contractor mk_contractor_fixpoint(function<bool(box const &, box const &)> guard, vector<contractor> const & cvec) {
     return contractor(make_shared<contractor_fixpoint>(guard, cvec));
 }
-contractor mk_contractor_fixpoint(function<bool(box const &, box const &)> guard,
-                                  vector<contractor> const & cvec1, vector<contractor> const & cvec2) {
-    return contractor(make_shared<contractor_fixpoint>(guard, cvec1, cvec2));
-}
-contractor mk_contractor_fixpoint(function<bool(box const &, box const &)> guard,
-                                  vector<contractor> const & cvec1,
-                                  vector<contractor> const & cvec2,
-                                  vector<contractor> const & cvec3) {
-    return contractor(make_shared<contractor_fixpoint>(guard, cvec1, cvec2, cvec3));
+contractor mk_contractor_fixpoint(function<bool(box const &, box const &)> guard, initializer_list<vector<contractor>> const & cvec_list) {
+    return contractor(make_shared<contractor_fixpoint>(guard, cvec_list));
 }
 contractor mk_contractor_int() {
     return contractor(make_shared<contractor_int>());
@@ -525,7 +518,7 @@ contractor mk_contractor_sample(unsigned const n, vector<constraint *> const & c
 contractor mk_contractor_aggressive(unsigned const n, vector<constraint *> const & ctrs) {
     return contractor(make_shared<contractor_aggressive>(n, ctrs));
 }
-std::ostream & operator<<(std::ostream & out, contractor const & c) {
+ostream & operator<<(ostream & out, contractor const & c) {
     out << *(c.m_ptr);
     return out;
 }

@@ -40,6 +40,7 @@ private:
     // Invariant: m_vars[i] ~ m_ivec[i]
     std::vector<Enode *> m_vars;
     ibex::IntervalVector m_values;
+    ibex::IntervalVector m_bounds;
     ibex::IntervalVector m_domains;
     std::vector<double>  m_precisions;
     std::unordered_map<std::string, int> m_name_index_map;
@@ -48,6 +49,7 @@ private:
 
 public:
     explicit box(std::vector<Enode *> const & vars);
+    box(box const & b, std::unordered_set<Enode *> const & extra_vars);
     box(std::vector<Enode *> const & vars, ibex::IntervalVector ivec);
     void constructFromLiterals(std::vector<Enode *> const & lit_vec);
 
@@ -59,9 +61,11 @@ public:
     inline ibex::IntervalVector & get_values() { return m_values; }
     inline ibex::IntervalVector const & get_values() const { return m_values; }
     inline ibex::IntervalVector const & get_domains() const { return m_domains; }
+    inline ibex::IntervalVector const & get_bounds() const { return m_bounds; }
     inline std::vector<Enode *> const & get_vars() const { return m_vars; }
     inline unsigned size() const { return m_values.size(); }
     inline void set_empty() { m_values.set_empty(); }
+    inline void set_bounds(ibex::IntervalVector const & iv) { m_bounds = iv; }
     inline unsigned get_index(Enode * e) const {
         return get_index(e->getCar()->getName());
     }
@@ -72,6 +76,10 @@ public:
         } else {
             throw std::logic_error("box::get_index(" + s + "): doesn not have the key " + s);
         }
+    }
+    inline box & shrink_bounds() {
+        m_bounds = m_values;
+        return *this;
     }
 
     // get_value
@@ -98,6 +106,32 @@ public:
     }
     inline ibex::Interval& get_value(Enode * const e) {
         return get_value(e->getCar()->getName());
+    }
+
+    // get_bound
+    inline ibex::Interval & get_bound(int i) { return m_bounds[i]; }
+    inline ibex::Interval const & get_bound(int i) const { return m_bounds[i]; }
+    inline ibex::Interval & get_bound(string const & s) {
+        auto const it = m_name_index_map.find(s);
+        if (m_name_index_map.find(s) != m_name_index_map.end()) {
+            return m_bounds[it->second];
+        } else {
+            throw std::logic_error("get_bound : Box does not have a key " + s);
+        }
+    }
+    inline ibex::Interval const & get_bound(string const & s) const {
+        auto const it = m_name_index_map.find(s);
+        if (m_name_index_map.find(s) != m_name_index_map.end()) {
+            return m_bounds[it->second];
+        } else {
+            throw std::logic_error("get_bound : Box does not have a key " + s);
+        }
+    }
+    inline const ibex::Interval& get_bound(Enode * const e) const {
+        return get_bound(e->getCar()->getName());
+    }
+    inline ibex::Interval& get_bound(Enode * const e) {
+        return get_bound(e->getCar()->getName());
     }
 
     // get_domain
@@ -179,14 +213,27 @@ public:
         }
         return seed;
     }
+    void intersect(box const & b);
+    void intersect(std::vector<box> const & vec);
+    void hull(box const & b);
+    void hull(std::vector<box> const & vec);
+    friend box intersect(box b1, box const & b2);
+    friend box hull(std::vector<box> const & s);
+    friend box hull(box b1, box const & b2);
 
     void assign_to_enode() const;
+    void adjust_bound(vector<box> const & box_stack);
 };
 
 bool operator<(ibex::Interval const & a, ibex::Interval const & b);
 bool operator>(ibex::Interval const & a, ibex::Interval const & b);
 bool operator<=(ibex::Interval const & a, ibex::Interval const & b);
 bool operator>=(ibex::Interval const & a, ibex::Interval const & b);
+
+box intersect(box b1, box const & b2);
+box intersect(std::vector<box> const & vec);
+box hull(box b1, box const & b2);
+box hull(std::vector<box> const & vec);
 
 ostream& display_diff(ostream& out, box const & b1, box const & b2);
 ostream& display(ostream& out, box const & b, bool const exact = false, bool const old_style = false);

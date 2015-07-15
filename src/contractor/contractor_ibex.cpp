@@ -36,7 +36,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "ibex/ibex.h"
 #include "opensmt/egraph/Enode.h"
 #include "util/box.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "util/ibex_enode.h"
 #include "util/logging.h"
 #include "util/proof.h"
@@ -48,6 +48,7 @@ using std::initializer_list;
 using std::unordered_set;
 using std::vector;
 using std::queue;
+using std::ostringstream;
 
 namespace dreal {
 ibex::SystemFactory* contractor_ibex_polytope::build_system_factory(vector<Enode *> const & vars, vector<nonlinear_constraint const *> const & ctrs) {
@@ -161,6 +162,17 @@ box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
     if (config.nra_proof) { old_box = b; }
 
     DREAL_LOG_DEBUG << "==================================================";
+
+    if (m_var_array.size() == 0) {
+        auto eval_result = m_ctr->eval(b);
+        if (eval_result.first == l_False) {
+            b.set_empty();
+            return b;
+        } else {
+            return b;
+        }
+    }
+
     // Construct iv from box b
     ibex::IntervalVector iv(m_var_array.size());
     for (int i = 0; i < m_var_array.size(); i++) {
@@ -196,7 +208,7 @@ box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
 
     // ======= Proof =======
     if (config.nra_proof) {
-        stringstream ss;
+        ostringstream ss;
         Enode const * const e = m_ctr->get_enode();
         ss << (e->getPolarity() == l_False ? "!" : "") << e;
         output_pruning_step(config.nra_proof_out, old_box, b, config.nra_readable_proof, ss.str());
@@ -298,7 +310,7 @@ box contractor_ibex_polytope::prune(box b, SMTConfig & config) const {
     }
     // ======= Proof =======
     if (config.nra_proof) {
-        stringstream ss;
+        ostringstream ss;
         for (auto const & ctr : m_ctrs) {
             Enode const * const e = ctr->get_enode();
             ss << (e->getPolarity() == l_False ? "!" : "") << e << ";";

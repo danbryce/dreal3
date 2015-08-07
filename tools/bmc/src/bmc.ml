@@ -1596,44 +1596,6 @@ let mk_active (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
 	let amodes = List.mapi (fun ia a -> (a, filter_aut_mode_distance a i heuristic ia)) auta in
 	Basic.make_and (List.map (fun (a, mlist) -> Basic.make_and (List.map (fun m -> mk_active_mode a m i) mlist)) amodes)
 	
-(*let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
-	let auta = Network.automata n in
-	let gvars = Network.all_varnames_unique (Network.automata n) in
-	let amodes = List.mapi (fun ia a -> (a, filter_aut_mode_distance a i heuristic ia)) auta in
-	let ajumps = List.map (fun (a, modes) -> List.map (fun m -> m.jumps) modes) amodes in (* [[[jmp]]] *)
-	let ajumps_flat = List.flatten (List.flatten ajumps) in
-	let achanges = List.map (fun j -> j.change) ajumps_flat in (* [change] *)
-	let set_vars_formulas = List.map (fun c -> Set.elements (Basic.collect_update_assignments_in_formula c)) achanges in
-	let list_vars_formulas = List.flatten set_vars_formulas in
-	let list_vars = List.sort_unique compare (List.map (fun (v, f) -> v) list_vars_formulas) in
-	(* [v, [~f]] *)
-	let list_vars_formulas_boxed = List.map (fun v -> (v, List.map (fun (_, fl) -> fl) (List.filter (fun (vi, _) -> vi = v) list_vars_formulas))) list_vars in
-	let list_vars_formulas_dash = List.map (fun (v, fl) -> (String.filter (fun c -> not (c = '\'')) v, fl)) list_vars_formulas_boxed in
-	
-	(*let dasdas = List.map (fun (v, fl) -> begin
-		match v = "lock" with
-			| true -> raise (Error.Lex_err ("whaat", (List.length fl)))
-			| false -> fl
-	end
-	) list_vars_formulas_dash in*)
-	
-	let list_vars_used = List.map (fun (v, fl) -> v) list_vars_formulas_dash in
-	let list_vars_unchanged = List.filter (fun v -> not (List.mem v list_vars_used)) gvars in
-	let list_vars_formulas_unchanged = List.map (fun v -> Basic.Eq (Basic.Var (mk_variable i "_t" v), Basic.Var (mk_variable (i+1) "_0" v))) list_vars_unchanged in
-	let list_vars_unchanged_boxed = Basic.make_and list_vars_formulas_unchanged in
-	let list_vars_formulas_boxed_rep = List.map (fun (v, fl) -> 
-		begin
-			let vrep = Basic.Eq (Basic.Var (mk_variable i "_t" v), Basic.Var (mk_variable (i+1) "_0" v)) in
-			let frep = List.map (fun f -> Basic.subst_formula (mk_jmp_variable i) f) fl in
-			let frepnot = List.map (fun f -> Basic.Not f) frep in
-			(vrep, Basic.make_and frepnot)
-		end
-	) list_vars_formulas_dash in
-	(*let axiom = List.map (fun (v, f) -> Basic.make_and [Basic.Imply (f, v); Basic.Imply (v, f)]) list_vars_formulas_boxed_rep in*)
-	let axiom = List.map (fun (v, f) -> Basic.Imply (f, v)) list_vars_formulas_boxed_rep in
-	let ax_boxed = Basic.make_and axiom in
-	Basic.make_and [ax_boxed; list_vars_unchanged_boxed]*)
-
 let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
 	let getMode aut mname = begin
 		let name = Hybrid.name aut in
@@ -1657,12 +1619,7 @@ let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option)
 	(* [v, [~f]] *)
 	let list_vars_formulas_boxed = List.map (fun v -> (v, List.map (fun (a, m, t, l, _, fl) -> (a, m, t, l, fl)) (List.filter (fun (_, _, _, _, vi, _) -> vi = v) list_vars_formulas))) list_vars in
 	let list_vars_formulas_dash = List.map (fun (v, fl) -> (String.filter (fun c -> not (c = '\'')) v, fl)) list_vars_formulas_boxed in
-	(*let dasdas = List.map (fun (v, fl) -> begin
-		match v = "lock" with
-			| true -> raise (Error.Lex_err ("whaat", (List.length fl)))
-			| false -> fl
-	end
-	) list_vars_formulas_dash in*)
+
 	let list_vars_used = List.map (fun (v, fl) -> v) list_vars_formulas_dash in
 	let list_vars_unchanged = List.filter (fun v -> not (List.mem v list_vars_used)) gvars in
 	let list_vars_formulas_unchanged = List.map (fun v -> Basic.Eq (Basic.Var (mk_variable i "_t" v), Basic.Var (mk_variable (i+1) "_0" v))) list_vars_unchanged in
@@ -1671,45 +1628,14 @@ let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option)
 		begin
 			let vrep = Basic.Eq (Basic.Var (mk_variable i "_t" v), Basic.Var (mk_variable (i+1) "_0" v)) in
 			let frep = List.map (fun (a, m, t, l, f) -> (a, m, t, l, (Basic.subst_formula (mk_jmp_variable i) f))) fl in
-			let frepconj = List.map (fun (a, m, t, l, f) -> Basic.Not (Basic.make_and [(mk_cnd (mk_enforce (i) a) m.mode_numId); f])) frep in
-			let frepnot = List.map (fun f -> f) frepconj in
 			
-			let ax = List.map (fun (a, m, t, l, f) -> Basic.make_and [(mk_cnd (mk_enforce (i+1) a) m.mode_numId);f]) frep in
-			let wx = List.map (fun (a, m, t, l, f) -> 
-				begin
-					let glab = Hybrid.labellist a in
-					let inter = lst_intersection l glab in
-					let ninter = List.filter (fun x -> not (List.mem x inter)) glab in
-					let syncs = Basic.make_and (List.map (fun v -> Basic.FVar (mk_sync i v)) inter) in
-					let nsyncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) ninter) in
-					(Basic.make_and [syncs; nsyncs])
-					
-				end
-			) frep in
-			
-			let ds = List.map (fun (a, m, t, l, f) -> (*Basic.Not*) (Basic.make_and [(mk_cnd (mk_enforce i a) m.mode_numId);(mk_cnd (mk_enforce (i+1) a) (Mode.mode_numId (getMode a t))); f])) frep in
-			
-			let bx = vrep::ds in
-			let cx = List.map (fun x -> Basic.make_and ((List.nth bx x)::(List.mapi (fun ai el -> 
-			begin
-				match ai = x with
-					| true -> Basic.True
-					| false -> Basic.Not el
-			end
-			) 
-			bx
-			)))
-			(List.of_enum (0 -- ((List.length bx)-1))) in
-			
-			(*let ds = List.map (fun (a, m, t, l, f) -> (*Basic.Not*) (Basic.make_and [(mk_cnd (mk_enforce i a) m.mode_numId);(mk_cnd (mk_enforce (i+1) a) (Mode.mode_numId (getMode a t))); f])) frep in*)
+			let ds = List.map (fun (a, m, t, l, f) -> (Basic.make_and [(mk_cnd (mk_enforce i a) m.mode_numId);(mk_cnd (mk_enforce (i+1) a) (Mode.mode_numId (getMode a t))); f])) frep in
 			
 			(vrep, Basic.make_or ds)
 		end
 	) list_vars_formulas_dash in
-	(*let axiom = List.map (fun (v, f) -> Basic.make_and [Basic.Imply (f, v); Basic.Imply (v, f)]) list_vars_formulas_boxed_rep in*)
-	(*let axiom = List.map (fun (v, f) -> Basic.Imply (f, v)) list_vars_formulas_boxed_rep in*)
+	
 	let axiom = List.map (fun (v, f) -> Basic.make_or [v;f]) list_vars_formulas_boxed_rep in
-	(*let axiom = List.map (fun (v, f) -> Basic.make_or [Basic.make_and [Basic.Not v; f]; Basic.make_and [v; Basic.Not f]]) list_vars_formulas_boxed_rep in*)
 	let ax_boxed = Basic.make_and axiom in
 	Basic.make_and [ax_boxed; list_vars_unchanged_boxed]
 	

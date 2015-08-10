@@ -59,6 +59,7 @@ namespace dop {
 static const char g_minimum_name[] = "min";
 
 Enode * make_univ_ctr(OpenSMTContext & ctx, unordered_map<string, Enode *> const & m, Enode * f) {
+    cerr << "make_univ_ctr = " << f << endl;
     unordered_map<Enode *, Enode *> subst_map;
 
     // 1. need to create a mapping from exist variables to forall variables
@@ -77,6 +78,8 @@ Enode * make_univ_ctr(OpenSMTContext & ctx, unordered_map<string, Enode *> const
         forall_var->setValueLowerBound(lb);
         forall_var->setValueUpperBound(ub);
         subst_map.emplace(exist_var, forall_var);
+        cerr << "subst_map: "
+             << exist_var << " => " << forall_var << endl;
     }
     // 2. need to make f(y1, y2) based on f(x1, x2)
     Enode * forall_f = dreal::subst(ctx, f, subst_map);
@@ -180,8 +183,20 @@ int main(int argc, const char * argv[]) {
     Enode * ctr_y = dop::make_univ_ctr(ctx, var_map, ctr);               // ctr(y)
     Enode * eq_cost = dop::make_eq_cost(ctx, cost, min_var);             // cost(x) = min
     Enode * leq_cost = dop::make_leq_cost(ctx, var_map, cost, min_var);  // min <= cost(y)
+    Enode * term = ctx.mkOr(ctx.mkCons(ctx.mkNot(ctx.mkCons(ctr_y)), ctx.mkCons(leq_cost)));  // !ctr(y) \/ (min <= cost(y))
+
+    vector<pair<string, Snode *>*> sorted_var_list;
+    for (Enode * e : term->get_forall_vars()) {
+        std::pair<string, Snode *> * p = new std::pair<string, Snode *>(e->getCar()->getName(), e->getSort());
+        sorted_var_list.push_back(p);
+    }
+    Enode * quantified = ctx.mkForall(&sorted_var_list, term);
+    cerr << "term = " << term << endl;
+    cerr << "quantified = " << quantified << endl;
     ctx.Assert(eq_cost);
-    ctx.Assert(leq_cost);
+    ctx.Assert(ctr);
+    // ctx.Assert(leq_cost);
+    ctx.Assert(quantified);
     cout << "Minimize   : " << cost << endl;
     cout << "Constraint : " << ctr << endl;
     cout << "Precision  : " << prec << endl;

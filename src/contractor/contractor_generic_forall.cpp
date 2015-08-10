@@ -192,23 +192,25 @@ box contractor_generic_forall::handle_disjunction(box b, unordered_set<Enode *> 
         //                       i
         std::vector<box> boxes;
         for (Enode * e : vec) {
-            lbool polarity = p ? l_True : l_False;
-            if (e->isNot()) {
-                polarity = !polarity;
-                e = e->get1st();
-            }
-            nonlinear_constraint * ctr = new nonlinear_constraint(e, polarity, subst);
-            if (ctr->get_var_array().size() == 0) {
-                auto result = ctr->eval(b);
-                if (result.first != false) {
-                    boxes.emplace_back(b);
+            if (!e->get_exist_vars().empty()) {
+                lbool polarity = p ? l_True : l_False;
+                if (e->isNot()) {
+                    polarity = !polarity;
+                    e = e->get1st();
                 }
-            } else {
-                contractor ctc = mk_contractor_ibex_fwdbwd(b, ctr);
-                box const bt = ctc.prune(b, config);
-                boxes.emplace_back(bt);
+                nonlinear_constraint * ctr = new nonlinear_constraint(e, polarity, subst);
+                if (ctr->get_var_array().size() == 0) {
+                    auto result = ctr->eval(b);
+                    if (result.first != false) {
+                        boxes.emplace_back(b);
+                    }
+                } else {
+                    contractor ctc = mk_contractor_ibex_fwdbwd(b, ctr);
+                    box const bt = ctc.prune(b, config);
+                    boxes.emplace_back(bt);
+                }
+                delete ctr;
             }
-            delete ctr;
         }
         b = hull(boxes);
 

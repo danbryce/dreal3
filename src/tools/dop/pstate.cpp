@@ -34,7 +34,12 @@ pstate::pstate() : m_stacks(m_ctx), m_var_map(m_ctx) {
     cfg.sat_theory_propagation = 1;
     cfg.nra_worklist_fp = 1;
     cfg.nra_ncbt = 1;
+    // m_ctx.setDebug(true);
     m_ctx.SetLogic(QF_NRA);
+}
+
+void pstate::debug_stacks() const {
+    m_stacks.debug();
 }
 
 // ============================
@@ -60,8 +65,8 @@ void pstate::close() {
 void pstate::reduce(function<Enode*(OpenSMTContext & ctx, vector<Enode*> &, vector<string> &)> const & f) {
     m_stacks.reduce(f);
 }
-Enode * pstate::get_result() const {
-    return m_stacks.get_result();
-}
+// Enode * pstate::get_result() const {
+//     return m_stacks.get_result();
+// }
 
 }  // namespace dop

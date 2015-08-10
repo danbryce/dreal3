@@ -38,8 +38,12 @@ public:
     void close();
     void push_back_op(std::string const & s);
     void push_back(Enode * const e);
-    Enode * get_result() const;
+    Enode * get_result();
+    std::vector<Enode *> get_top_stack() const {
+        return m_exp_stacks.back();
+    }
     void reduce(std::function<Enode*(OpenSMTContext & ctx, std::vector<Enode*> &, std::vector<std::string> &)> const & f);
+    void debug() const;
 };
 
 

@@ -29,26 +29,32 @@ using std::string;
 using std::function;
 
 void stacks::open() {
-    assert(m_exp_stacks.size() == m_op_stacks.size());
+    // assert(m_exp_stacks.size() == m_op_stacks.size());
     m_exp_stacks.push_back(vector<Enode*>());
     m_op_stacks.push_back(vector<string>());
-    assert(m_exp_stacks.size() == m_op_stacks.size());
+    // assert(m_exp_stacks.size() == m_op_stacks.size());
 }
 
 void stacks::close() {
     assert(m_exp_stacks.size() > 0);
     assert(m_op_stacks.size() > 0);
-    assert(m_exp_stacks.size() == m_op_stacks.size());
-    vector<Enode*> const & top_stack = m_exp_stacks.back();
-    assert(top_stack.size() <= 1);
-    if (top_stack.size() == 1) {
+    // assert(m_exp_stacks.size() == m_op_stacks.size());
+    vector<Enode*> top_stack = m_exp_stacks.back();
+    // assert(top_stack.size() <= 1);
+    if (top_stack.size() >= 1) {
         // | x |
         //
         // |   |  =>  | x |
         // | y |      | y |
-        Enode * const top_stack_content = top_stack.back();
+        Enode * top_stack_content = top_stack.back();
         m_exp_stacks.pop_back();
-        m_exp_stacks.back().push_back(top_stack_content);
+        if (m_exp_stacks.size() > 0) {
+            m_exp_stacks.back().push_back(top_stack_content);
+        } else {
+            vector<Enode*> v;
+            v.push_back(top_stack_content);
+            m_exp_stacks.push_back(v);
+        }
         m_op_stacks.pop_back();
     } else {
         // |   |
@@ -58,7 +64,7 @@ void stacks::close() {
         m_exp_stacks.pop_back();
         m_op_stacks.pop_back();
     }
-    assert(m_exp_stacks.size() == m_op_stacks.size());
+    // assert(m_exp_stacks.size() == m_op_stacks.size());
 }
 
 void stacks::push_back_op(string const & s) {
@@ -71,7 +77,7 @@ void stacks::push_back(Enode * const e) {
     top_stack.push_back(e);
 }
 
-Enode * stacks::get_result() const {
+Enode * stacks::get_result() {
     assert(m_exp_stacks.size() == 1);        // everything has to be reduced.
     assert(m_op_stacks.size() == 1);         // everything has to be reduced.
     assert(m_op_stacks.back().size() == 0);  // everything has to be reduced.
@@ -85,6 +91,30 @@ void stacks::reduce(function<Enode*(OpenSMTContext & ctx, vector<Enode*> &, vect
     vector<string> & top_op_stack = m_op_stacks.back();
     Enode * const result = f(m_ctx, top_exp_stack, top_op_stack);
     top_exp_stack.push_back(result);
+}
+
+void stacks::debug() const {
+    cerr << "exp stacks = " << m_exp_stacks.size() << endl;
+    cerr << "=============" << endl;
+    for(auto const & exp_stack : m_exp_stacks) {
+        std::cerr << "exp stack, len = " << exp_stack.size() << endl;
+        std::cerr << "--------" << endl;
+        for (auto enode : exp_stack) {
+            std::cerr << enode << endl;
+        }
+        std::cerr << "--------" << endl;
+
+    }
+    cerr << "op stacks = " << m_op_stacks.size() << endl;
+    cerr << "=============" << endl;
+    for(auto const & op_stack : m_op_stacks) {
+        std::cerr << "op stack, len = " << op_stack.size() << endl;
+        std::cerr << "--------" << endl;
+        for (auto op : op_stack) {
+            std::cerr << op << endl;
+        }
+        std::cerr << "--------" << endl;
+    }
 }
 
 }  // namespace dop

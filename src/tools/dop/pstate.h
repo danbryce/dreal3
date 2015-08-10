@@ -41,12 +41,65 @@ private:
     var_map        m_var_map;
     bool           m_var_decl_done = false;
     double         m_prec = 0.001;
+    Enode *        m_cost;
+    Enode *        m_ctr;
+    std::pair<Enode *, Enode *> parse_formula_helper() {
+        auto top_stack = m_stacks.get_top_stack();
+        assert(top_stack.size() >= 2);
+        Enode * rhs = top_stack.back();
+        top_stack.pop_back();
+        Enode * lhs = top_stack.back();
+        top_stack.pop_back();
+        return make_pair(lhs, rhs);
+    }
 
 public:
     pstate();
+    void debug_stacks() const;
     bool is_var_decl_done() const { return m_var_decl_done; }
     void mark_var_decl_done() { m_var_decl_done = true; }
     OpenSMTContext & get_ctx() { return m_ctx; }
+    Enode * get_cost() const { return m_cost; };
+    void parse_cost() {
+        m_cost = m_stacks.get_result();
+    }
+    Enode * get_ctr() const { return m_ctr; };
+    void parse_formula_lt() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkLt(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
+    }
+    void parse_formula_gt() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkGt(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
+    }
+    void parse_formula_le() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkLeq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
+    }
+    void parse_formula_ge() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkGeq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
+    }
+    void parse_formula_eq() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkEq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
+    }
+    void parse_formula_neq() {
+        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
+        Enode * lhs = nodes.first;
+        Enode * rhs = nodes.second;
+        m_ctr = m_ctx.mkNot(m_ctx.mkEq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs))));
+    }
 
     // ============================
     // m_stacks (expression stacks)
@@ -57,7 +110,6 @@ public:
     void open();
     void close();
     void reduce(std::function<Enode*(OpenSMTContext & ctx, std::vector<Enode*> &, std::vector<std::string> &)> const & f);
-    Enode * get_result() const;
 
     // =========
     // Precision

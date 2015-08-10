@@ -58,7 +58,7 @@ namespace dop {
 
 static const char g_minimum_name[] = "min";
 
-Enode * make_leq_ctr(OpenSMTContext & ctx, unordered_map<string, Enode *> const & m, Enode * f, Enode * min_var) {
+Enode * make_univ_ctr(OpenSMTContext & ctx, unordered_map<string, Enode *> const & m, Enode * f) {
     unordered_map<Enode *, Enode *> subst_map;
 
     // 1. need to create a mapping from exist variables to forall variables
@@ -80,6 +80,36 @@ Enode * make_leq_ctr(OpenSMTContext & ctx, unordered_map<string, Enode *> const 
     }
     // 2. need to make f(y1, y2) based on f(x1, x2)
     Enode * forall_f = dreal::subst(ctx, f, subst_map);
+    return forall_f;
+}
+
+Enode * make_leq_cost(OpenSMTContext & ctx, unordered_map<string, Enode *> const & m, Enode * f, Enode * min_var) {
+    unordered_map<Enode *, Enode *> subst_map;
+
+    // 1. need to create a mapping from exist variables to forall variables
+    Snode * const real_sort = ctx.mkSortReal();
+    for (auto const & p : m) {
+        string const name = p.first;
+        string const forall_var_name = string("forall_") + name;
+        Enode * exist_var = p.second;
+        double const lb = exist_var->getDomainLowerBound();
+        double const ub = exist_var->getDomainUpperBound();
+        ctx.DeclareFun(forall_var_name.c_str(), real_sort);
+        Enode * const forall_var = ctx.mkVar(forall_var_name.c_str(), true);
+        forall_var->setForallVar();
+        forall_var->setDomainLowerBound(lb);
+        forall_var->setDomainUpperBound(ub);
+        forall_var->setValueLowerBound(lb);
+        forall_var->setValueUpperBound(ub);
+        subst_map.emplace(exist_var, forall_var);
+    }
+
+    // opensmt_expr formula = opensmt_mk_forall(ctx, vars, 1,
+    //                                          opensmt_mk_or_2(ctx, circle1, circle2));
+
+
+    // 2. need to make f(y1, y2) based on f(x1, x2)
+    Enode * forall_f = dreal::subst(ctx, f, subst_map);
 
     // 3. return f(x1, x2) <= f(y1, y2) /\ min* = f(x1, x2)
     Enode * const args_list = ctx.mkCons(min_var, ctx.mkCons(forall_f));
@@ -95,7 +125,7 @@ Enode * make_min_var(OpenSMTContext & ctx, unordered_map<string, Enode *> & m) {
     return min_var;
 }
 
-Enode * make_eq_ctr(OpenSMTContext & ctx, Enode * e1, Enode * e2) {
+Enode * make_eq_cost(OpenSMTContext & ctx, Enode * e1, Enode * e2) {
     Enode * const eq = ctx.mkEq(ctx.mkCons(e1, ctx.mkCons(e2)));
     return eq;
 }
@@ -142,27 +172,39 @@ int main(int argc, const char * argv[]) {
     }
     OpenSMTContext & ctx = p.get_ctx();
     unordered_map<string, Enode *> var_map = p.get_var_map();
-    Enode * const f = p.get_result();
+    Enode * const cost = p.get_cost();
+    Enode * const ctr = p.get_ctr();
     double const prec = config.get_precision() > 0 ? config.get_precision() : p.get_precision();
     ctx.setPrecision(prec);
     Enode * min_var = dop::make_min_var(ctx, var_map);
-    Enode * leq_ctr = dop::make_leq_ctr(ctx, var_map, f, min_var);
-    Enode * eq_ctr = dop::make_eq_ctr(ctx, f, min_var);
-    ctx.Assert(leq_ctr);
-    ctx.Assert(eq_ctr);
-    cout << "Minimize : " << f << endl;
-    cout << "Precision: " << prec << endl;
-    cout << "Solve    : " << leq_ctr << endl
-         << "           " << eq_ctr << endl;
-    cout << "Result   : ";
+    Enode * ctr_y = dop::make_univ_ctr(ctx, var_map, ctr);               // ctr(y)
+    Enode * eq_cost = dop::make_eq_cost(ctx, cost, min_var);             // cost(x) = min
+    Enode * leq_cost = dop::make_leq_cost(ctx, var_map, cost, min_var);  // min <= cost(y)
+    ctx.Assert(eq_cost);
+    ctx.Assert(leq_cost);
+    cout << "Minimize   : " << cost << endl;
+    cout << "Constraint : " << ctr << endl;
+    cout << "Precision  : " << prec << endl;
+    cout << "Solve      : " << leq_cost << endl
+         << "             " << eq_cost << endl
+         << "             " << ctr << endl
+         << "             " << ctr_y << endl;
+    cout << "Result     : ";
     if (ctx.CheckSAT() == l_True) {
         cout << "delta-sat" << endl;
         dop::print_result(var_map);
         if (config.get_visualize()) {
-            dop::visualize_result_via_python(f, var_map, config.get_vis_cell(), dop::g_minimum_name);
+            dop::visualize_result_via_python(cost, var_map, config.get_vis_cell(), dop::g_minimum_name);
         }
     } else {
         cout << "unsat" << endl;
     }
     return 0;
 }
+// minimize cost(x)
+// satisfying ctr(x)
+// exists x. ctr(x) /\ forall y. [ctr(y) -> (cost(x) <= cost(y))]
+// exists x. ctr(x) /\ forall y. [!ctr(y) \/ (cost(x) <= cost(y))]
+// exists x, min. cost(x) = min /\
+//                ctr(x) /\
+//                forall y. [!ctr(y) \/ min <= cost(y))]

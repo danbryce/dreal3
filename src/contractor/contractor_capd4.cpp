@@ -59,20 +59,15 @@ void split(capd::interval const & i, unsigned n, vector<capd::interval> & ret) {
     ret.reserve(ret.size() + n);
     double lb = i.leftBound();
     double const rb = i.rightBound();
+    double const width = rb - lb;
+    double const step = width / n;
+    for (unsigned i = 0; (lb <= rb) && (i < n - 1); i++) {
+        ret.emplace_back(lb, min(lb + step, rb));
+        assert(lb <= min(lb + step, rb));
+        lb += step;
+    }
     if (lb < rb) {
-        double const width = rb - lb;
-        double const step = width / n;
-        for (unsigned i = 0; (lb <= rb) && (i < n - 1); i++) {
-            ret.emplace_back(lb, min(lb + step, rb));
-            assert(lb <= min(lb + step, rb));
-            lb += step;
-        }
-        if (lb < rb) {
-            ret.emplace_back(lb, rb);
-        }
-    } else {
-        // lb == rb
-        ret.push_back(i);
+        ret.emplace_back(lb, rb);
     }
 }
 
@@ -399,15 +394,7 @@ bool compute_enclosures(capd::IOdeSolver & solver, capd::interval const & prevTi
         // TODO(soonhok): check invariant
         // if (!check_invariant(v, m_inv)) {
         DREAL_LOG_INFO << "compute_enclosures:" << dt << "\t" << v;
-        if (add_all || (T.leftBound() <= prevTime + subsetOfDomain.leftBound())
-            || (T.leftBound() < prevTime + subsetOfDomain.rightBound())) {
-            //           [       T         ]
-            // --------------------------------
-            // 1.  [  O   ]
-            // 2.         [   O   ]
-            // 3.   [   O   ]
-            // 4.  [  X  ]
-            // 5. [  X ]
+        if (add_all || (prevTime + subsetOfDomain.rightBound() > T.leftBound())) {
             enclosures.emplace_back(dt, v);
         }
     }
@@ -417,17 +404,14 @@ bool compute_enclosures(capd::IOdeSolver & solver, capd::interval const & prevTi
 bool filter(vector<pair<capd::interval, capd::IVector>> & enclosures, capd::IVector & X_t, capd::interval & T) {
     // 1) Intersect each v in enclosure with X_t.
     // 2) If there is no intersection in 1), set dt an empty interval [0, 0]
-    DREAL_LOG_DEBUG << "filter : enclosure.size = " << enclosures.size();
     for (pair<capd::interval, capd::IVector> & item : enclosures) {
         capd::interval & dt = item.first;
         capd::IVector &  v  = item.second;
         // v = v union X_t
-        DREAL_LOG_DEBUG << "before filter: " << v << "\t" << X_t;
         if (!intersection(v, X_t, v)) {
             dt.setLeftBound(0.0);
             dt.setRightBound(0.0);
         }
-        DREAL_LOG_DEBUG << "after filter: " << v;
     }
     enclosures.erase(remove_if(enclosures.begin(), enclosures.end(),
                                [](pair<capd::interval, capd::IVector> const & item) {
@@ -438,19 +422,13 @@ bool filter(vector<pair<capd::interval, capd::IVector>> & enclosures, capd::IVec
     if (enclosures.empty()) {
         return false;
     } else {
-        capd::interval all_T = enclosures.begin()->first;
-        capd::IVector all_X_t = enclosures.begin()->second;
+        T = enclosures.begin()->first;
+        X_t  = enclosures.begin()->second;
         for (pair<capd::interval, capd::IVector> & item : enclosures) {
             capd::interval & dt = item.first;
             capd::IVector &  v  = item.second;
-            all_X_t = intervalHull(all_X_t,  v);
-            all_T = intervalHull(all_T, dt);
-        }
-        if (!intersection(T, all_T, T)) {
-            return false;
-        }
-        if (!intersection(X_t, all_X_t, X_t)) {
-            return false;
+            X_t  = intervalHull(X_t,  v);
+            T    = intervalHull(T, dt);
         }
         return true;
     }
@@ -502,9 +480,6 @@ box contractor_capd_fwd_full::prune(box b, SMTConfig & config) const {
     set_params(*m_vectorField, b, ic);
 
     try {
-        if (config.nra_ODE_step > 0) {
-            m_solver->setStep(config.nra_ODE_step);
-        }
         capd::IVector  m_X_0 = extract_ivector(b, ic.get_vars_0());
         capd::IVector  m_X_t = extract_ivector(b, ic.get_vars_t());
         ibex::Interval const & ibex_T = b[ic.get_time_t()];
@@ -544,10 +519,8 @@ box contractor_capd_fwd_full::prune(box b, SMTConfig & config) const {
             update_box_with_ivector(b, ic.get_vars_t(), m_X_t);
             // TODO(soonhok): Here we still assume that time_0 = zero.
             b[ic.get_time_t()] = ibex::Interval(m_T.leftBound(), m_T.rightBound());
-            DREAL_LOG_DEBUG << "contractor_capd_fwd_full::prune: get non-empty set after filtering";
         } else {
             // UNSAT
-            DREAL_LOG_DEBUG << "contractor_capd_fwd_full::prune: get empty set after filtering";
             b.set_empty();
         }
         DREAL_LOG_INFO << "m_X_0 : " << m_X_0;
@@ -583,7 +556,7 @@ unsigned int extract_step(string const & name) {
     return stoi(step_part, nullptr);
 }
 
-json contractor_capd_fwd_full::generate_trace(box b, SMTConfig & config) const {
+json contractor_capd_fwd_full::generate_trace(box b, SMTConfig &) const {
     integral_constraint const & ic = m_ctr->get_ic();
     b = intersect_params(b, ic);
     if (!m_solver) {
@@ -592,9 +565,6 @@ json contractor_capd_fwd_full::generate_trace(box b, SMTConfig & config) const {
     }
     set_params(*m_vectorField, b, ic);
     try {
-        if (config.nra_ODE_step > 0) {
-            m_solver->setStep(config.nra_ODE_step);
-        }
         capd::IVector  m_X_0 = extract_ivector(b, ic.get_vars_0());
         capd::IVector  m_X_t = extract_ivector(b, ic.get_vars_t());
         ibex::Interval const & ibex_T = b[ic.get_time_t()];
@@ -639,22 +609,6 @@ json contractor_capd_fwd_full::generate_trace(box b, SMTConfig & config) const {
             }
             ret.push_back(entry);
             i++;
-        }
-        for (auto const & var : ic.get_pars_0()) {
-            json entry;
-            string const name = var->getCar()->getName();
-            entry["key"] = name;
-            entry["mode"] = m_ctr->get_ic().get_flow_id();
-            entry["step"] = extract_step(name);
-            entry["values"] = {};
-            json value_begin, value_end;
-            value_begin["time"] = {0.0, 0.0};
-            value_begin["enclosure"] = {b[var].lb(), b[var].ub()};
-            entry["values"].push_back(value_begin);
-            value_end["time"] = {m_T.leftBound(), m_T.rightBound()};
-            value_end["enclosure"] = {b[var].lb(), b[var].ub()};
-            entry["values"].push_back(value_end);
-            ret.push_back(entry);
         }
         return ret;
     } catch (capd::intervals::IntervalError<double> & e) {
@@ -732,9 +686,6 @@ box contractor_capd_bwd_full::prune(box b, SMTConfig & config) const {
     set_params(*m_vectorField, b, ic);
 
     try {
-        if (config.nra_ODE_step > 0) {
-            m_solver->setStep(config.nra_ODE_step);
-        }
         capd::IVector  m_X_0 = extract_ivector(b, ic.get_vars_0());
         capd::IVector  m_X_t = extract_ivector(b, ic.get_vars_t());
         ibex::Interval const & ibex_T = b[ic.get_time_t()];

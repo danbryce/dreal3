@@ -44,6 +44,8 @@ private:
     ibex::IntervalVector m_domains;
     std::vector<double>  m_precisions;
     std::unordered_map<std::string, int> m_name_index_map;
+    std::tuple<int, box, box> bisect_int_at(int i) const;
+    std::tuple<int, box, box> bisect_real_at(int i) const;
     std::tuple<int, box, box> bisect_at(int i) const;
     void constructFromVariables(std::vector<Enode *> const & vars);
 
@@ -56,6 +58,8 @@ public:
     std::tuple<int, box, box> bisect(double precision) const;
     vector<bool> diff_dims(box const & b) const;
     std::set<box> sample_points(unsigned const n) const;
+    double get_bisection_ratio(int i) const;
+    inline bool is_time_variable(int i) const { return get_name(i).find("time_") == 0; };
     inline bool is_bisectable() const { return m_values.is_bisectable(); }
     inline bool is_empty() const { return size() == 0 || m_values.is_empty(); }
     inline ibex::IntervalVector & get_values() { return m_values; }

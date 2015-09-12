@@ -27,6 +27,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 #include "opensmt/egraph/Enode.h"
 #include "opensmt/api/OpenSMTContext.h"
 #include "tools/dop/stacks.h"
@@ -36,70 +37,32 @@ namespace dop {
 
 class pstate {
 private:
-    OpenSMTContext m_ctx;
-    stacks         m_stacks;
-    var_map        m_var_map;
-    bool           m_var_decl_done = false;
-    double         m_prec = 0.001;
-    Enode *        m_cost;
-    Enode *        m_ctr;
-    std::pair<Enode *, Enode *> parse_formula_helper() {
-        auto top_stack = m_stacks.get_top_stack();
-        assert(top_stack.size() >= 2);
-        Enode * rhs = top_stack.back();
-        top_stack.pop_back();
-        Enode * lhs = top_stack.back();
-        top_stack.pop_back();
-        return make_pair(lhs, rhs);
-    }
+    OpenSMTContext       m_ctx;
+    stacks               m_stacks;
+    var_map              m_var_map;
+    bool                 m_var_decl_done = false;
+    double               m_prec = 0.001;
+    Enode *              m_cost;
+    std::vector<Enode *> m_ctrs;
+    std::pair<Enode *, Enode *> parse_formula_helper();
 
 public:
     pstate();
-    void debug_stacks() const;
+    std::ostream & debug_stacks(std::ostream & out) const;
     bool is_var_decl_done() const { return m_var_decl_done; }
     void mark_var_decl_done() { m_var_decl_done = true; }
     OpenSMTContext & get_ctx() { return m_ctx; }
-    Enode * get_cost() const { return m_cost; };
+    Enode * get_cost() const { return m_cost; }
     void parse_cost() {
         m_cost = m_stacks.get_result();
     }
-    Enode * get_ctr() const { return m_ctr; };
-    void parse_formula_lt() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkLt(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
-    }
-    void parse_formula_gt() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkGt(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
-    }
-    void parse_formula_le() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkLeq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
-    }
-    void parse_formula_ge() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkGeq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
-    }
-    void parse_formula_eq() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkEq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs)));
-    }
-    void parse_formula_neq() {
-        std::pair<Enode *, Enode *> nodes = parse_formula_helper();
-        Enode * lhs = nodes.first;
-        Enode * rhs = nodes.second;
-        m_ctr = m_ctx.mkNot(m_ctx.mkEq(m_ctx.mkCons(lhs, m_ctx.mkCons(rhs))));
-    }
+    std::vector<Enode *> get_ctrs() const { return m_ctrs; }
+    void parse_formula_lt();
+    void parse_formula_gt();
+    void parse_formula_le();
+    void parse_formula_ge();
+    void parse_formula_eq();
+    void parse_formula_neq();
 
     // ============================
     // m_stacks (expression stacks)
@@ -110,6 +73,9 @@ public:
     void open();
     void close();
     void reduce(std::function<Enode*(OpenSMTContext & ctx, std::vector<Enode*> &, std::vector<std::string> &)> const & f);
+    void clear_stacks() {
+        m_stacks.clear();
+    }
 
     // =========
     // Precision

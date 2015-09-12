@@ -389,6 +389,7 @@ template<> struct action<exp_sqrt> {
 template<> struct action<cost_decl> {
     static void apply(const pegtl::input &, pstate &p ) {
         p.parse_cost();
+        p.clear_stacks();
     }
 };
 

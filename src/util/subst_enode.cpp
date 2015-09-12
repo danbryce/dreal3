@@ -137,7 +137,7 @@ Enode * subst(OpenSMTContext & ctx, Enode * e, unordered_map<Enode *, Enode *> c
         } else if (e->isNot()) {
             assert(e->getArity() == 1);
             Enode * const e1 = subst(ctx, e->get1st(), m);
-            Enode * res = ctx.mkNot(e1);
+            Enode * res = ctx.mkNot(ctx.mkCons(e1));
             return res;
         } else if (e->isGt()) {
             assert(e->getArity() == 2);

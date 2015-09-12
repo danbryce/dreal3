@@ -73,6 +73,7 @@ int get_mode(Enode * lit) {
     theory_handler = thandler;
     trail = trl;
     trail_lim = trl_lim;
+    m_config = &c;
 
     m_is_initialized = true; // Have we computed suggestions yet?  Does not happen here.
     if (c.nra_bmc_heuristic.compare("") != 0){
@@ -340,7 +341,8 @@ void hybrid_heuristic::inform(Enode * e){
     }
 
     DREAL_LOG_DEBUG << "hybrid_heuristic::backtrack()";
-
+    lastTrailEnd = trail->size();
+    DREAL_LOG_DEBUG << "hybrid_heuristic::backtrack() lastTrailEnd = " << lastTrailEnd;
     if( m_stack_lim.size() < (unsigned long)trail_lim->size())
       return;
 
@@ -350,13 +352,14 @@ void hybrid_heuristic::inform(Enode * e){
     m_suggestions.clear();
     backtracked = true;
 
-    lastTrailEnd = trail->size();
+
      displayTrail();
     // displayStack();
 
 
     //end of m_stack level corresponding to end of trail
-     int bt_point = ((trail_lim->size() < m_stack_lim.size() && trail_lim->size() > 0)  ?
+     int bt_point = ((trail_lim->size() < m_stack_lim.size() //&& trail_lim->size() > 0
+		      )  ?
 		     m_stack_lim[trail_lim->size()] :
 		     m_stack.size());
 
@@ -370,7 +373,7 @@ void hybrid_heuristic::inform(Enode * e){
       m_stack.pop_back();
       stack_literals.erase(s->first);
       delete s;
-      lastTrailEnd--;
+      //lastTrailEnd--;
     }
     
      displayStack();
@@ -453,7 +456,7 @@ void hybrid_heuristic::inform(Enode * e){
     if(time < m_depth && autom > 0 && !dec->empty()){
       vector<pair<int, labeled_transition*>*> parallel_transitions;
       for(int k = 0; k < autom; k++){
-	DREAL_LOG_DEBUG << "checking sync with a" << k;
+	DREAL_LOG_DEBUG << "checking sync with a" << (k+1);
 	parallel_transitions.push_back(new pair<int, labeled_transition*>(k, m_decision_stack[m_decision_stack.size()-(autom-k)]->second->back()));
       }
       for (auto c : *dec) {
@@ -519,7 +522,7 @@ bool hybrid_heuristic::expand_path(bool first_expansion){
     }
 
     // path already expanded by SAT solver, and already pushed on m_stack
-    if (m_stack.size() == (num_autom*(m_depth+1))){
+    if (m_decision_stack.size() == (num_autom*(m_depth+1))){
       DREAL_LOG_INFO << "path already full"; 
         return true;
     }
@@ -554,7 +557,7 @@ bool hybrid_heuristic::expand_path(bool first_expansion){
         astack->second = dec;
 
 	 if (dec->size() == 0){
-	  DREAL_LOG_INFO << "No decisions left at time " << time << " for a" << autom << endl;
+	   DREAL_LOG_INFO << "No decisions left at time " << time << " for a" << (autom+1) << endl;
             return false;
         }
 
@@ -562,7 +565,7 @@ bool hybrid_heuristic::expand_path(bool first_expansion){
       } else {
         labeled_transition* parent = m_decision_stack[parent_index]->second->back();
 
-        DREAL_LOG_INFO << "Adding decision at time " << time  << " to reach " << parent->second << " in a" << autom << " parent_index = " << parent_index;
+        DREAL_LOG_INFO << "Adding decision at time " << time  << " to reach " << parent->second << " in a" << (autom+1) << " parent_index = " << parent_index;
 
         vector<labeled_transition*> * preds = (*predecessors[autom])[(parent->second)-1];
 	DREAL_LOG_INFO << "|preds| = " << preds->size();
@@ -577,7 +580,7 @@ bool hybrid_heuristic::expand_path(bool first_expansion){
 		   << lab << " ";
 	  }
 	  }
-	  DREAL_LOG_DEBUG << "Checking predecessor a" << autom << " "
+	  DREAL_LOG_DEBUG << "Checking predecessor a" << (autom+1) << " "
 			  << pred->second << "--[" << labels.str() << "]--> " << parent->second;
 	}
 	//	DREAL_LOG_DEBUG << "HI";
@@ -658,7 +661,7 @@ bool hybrid_heuristic::expand_path(bool first_expansion){
     bool trans_noop = is_noop(trans.second);
 
 
-     DREAL_LOG_DEBUG << "can_synchronize a" << trans.first << " src " << trans.second->second << (trans_noop ? " noop" : "");
+    DREAL_LOG_DEBUG << "can_synchronize a" << trans.first << " src " << trans.second->second << (trans_noop ? " noop" : "") << "?";
      if(trans.second->first){
     for(auto lab : *trans.second->first){
       DREAL_LOG_DEBUG << "lab = " << label_from_indices[lab]<< ":" << lab;
@@ -776,6 +779,24 @@ bool mode_literal_compare (Enode *  i, Enode *  j) {
 bool hybrid_heuristic::unwind_path() {
   vector<int> path;
   path.assign(num_autom*(m_depth+1), -1);
+
+  vector<set<int>*> path_labels;
+  for (int i = 0; i < m_depth; i++){
+    set<int>* step_labels = new set<int>();
+    path_labels.push_back(step_labels);
+    vector<Enode*> *time_label_enode = time_label_enodes[i];
+    for (auto e : m_stack) {
+      for(auto l : *time_label_enode){
+	if(e->second && !e->first->isNot() && e->first == l){
+	  step_labels->insert(label_enode_indices[e->first]);
+	  DREAL_LOG_DEBUG << "Path Label " << label_enode_indices[e->first]
+			  << " " << e->first << " at time " << i;
+	}
+      }
+    }
+  }
+  
+  
   int actual_path_size = 0;
   for (auto e : m_stack) {
     // if (e->getDecPolarity() != l_Undef){
@@ -796,10 +817,11 @@ bool hybrid_heuristic::unwind_path() {
       }
     }
   }
+  
 
   bool paths_agree = true;
-  int agree_depth = 0;
-  for (int j = static_cast<int>(path.size() - 1); j > -1; j--){
+  int agree_depth = -1;
+  for (int j = static_cast<int>(path.size() - 1); (j > -1 && paths_agree) ; j--){
     DREAL_LOG_INFO << "Path (" << j << ") = " << path[j] << endl;
     int stack_index_for_path_index = static_cast<int>(path.size() - j - 1);
     if (stack_index_for_path_index < static_cast<int>(m_decision_stack.size())){
@@ -812,7 +834,20 @@ bool hybrid_heuristic::unwind_path() {
       DREAL_LOG_INFO << "Stack(" << stack_index_for_path_index << ") = *";
 
     if (stack_index_for_path_index <  static_cast<int>(m_decision_stack.size())){
-      if (m_decision_stack[stack_index_for_path_index]->second->back()->second != path[j]){
+      set<int> *transition_labels = m_decision_stack[stack_index_for_path_index]->second->back()->first;
+      bool labels_agree = true;
+      int stack_time_step = m_depth - (stack_index_for_path_index/num_autom);
+      for (auto l : *transition_labels){
+	DREAL_LOG_DEBUG << "Checking if label " << l << " is on path at time " << stack_time_step;
+	if(path_labels[stack_time_step]->find(l) == path_labels[stack_time_step]->end()){
+	  DREAL_LOG_DEBUG << "Label " << l << " is not on path";
+	  labels_agree = false;
+	  break;
+	}
+      }
+      
+      if (m_decision_stack[stack_index_for_path_index]->second->back()->second != path[j] ||
+	  !labels_agree){
         if (paths_agree){
           agree_depth = stack_index_for_path_index-1;
           DREAL_LOG_INFO << "Last Agreed at: " << agree_depth << endl;
@@ -827,9 +862,9 @@ bool hybrid_heuristic::unwind_path() {
       paths_agree = false;
     }
   }
-
+  
   // only unwind if decision stack needs to be
-  int num_backtrack_steps = m_decision_stack.size() - agree_depth-1; // actual_path_size;
+  int num_backtrack_steps = m_decision_stack.size() - (agree_depth+1); // actual_path_size;
   DREAL_LOG_DEBUG << "Backtracking, # steps = " << num_backtrack_steps;
   if (// static_cast<int>(m_decision_stack.size()) > actual_path_size ||
       !paths_agree && num_backtrack_steps > 0){
@@ -925,6 +960,12 @@ bool hybrid_heuristic::unwind_path() {
     }
   }
 
+  for (int i = 0; i < m_depth; i++){
+    delete path_labels[i];
+  }
+ 
+
+  
   return m_decision_stack.size() > 0;
 }
 
@@ -937,7 +978,7 @@ bool hybrid_heuristic::unwind_path() {
 
     while (!found_sibling &&
 	   m_decision_stack.size() > 0 &&
-	   m_decision_stack.size() >= lastDecisionStackEnd
+	   m_decision_stack.size() > lastDecisionStackEnd
 	   ){
       DREAL_LOG_INFO << "Backtracking at level "
                      << m_decision_stack.size() << endl;
@@ -982,7 +1023,7 @@ bool hybrid_heuristic::unwind_path() {
                    << lastTrailEnd << " trail->size() = " << trail->size();
     //    DREAL_LOG_INFO << network_to_string();
     //    displayTrail();
-    //    displayStack();
+    displayStack();
 
     if((unsigned int) trail_lim->size() >  m_stack_lim.size() &&
        m_stack.size() > 0) { //track start of levels after the first level
@@ -1053,7 +1094,8 @@ bool hybrid_heuristic::getSuggestions() {
     }
   }
 
-  if (m_decision_stack.size() == m_stack_lim.size()){
+  // if couldn't expand path and not already at end of path
+  if (m_decision_stack.size() <= lastDecisionStackEnd && m_decision_stack.size() < (m_depth+1)*num_autom){
     DREAL_LOG_INFO << "Ran out of suggestions, subtree is unsat!";
     //generate conflict clause
     return false;
@@ -1174,7 +1216,9 @@ bool hybrid_heuristic::getSuggestions() {
       s = (*(*time_mode_enodes[autom])[time])[mode-1];
       DREAL_LOG_INFO << "enode = " << s << endl;
       if (// s->getDecPolarity() == l_Undef &&
-          !s->isDeduced()){
+          //!s->isDeduced()
+	  true
+	  ){
         //	s->setDecPolarity(l_True);
         m_suggestions.push_back(new pair<Enode*, bool>(s, true));
         DREAL_LOG_INFO << "Suggested Pos: " << s << endl;
@@ -1307,10 +1351,12 @@ bool hybrid_heuristic::getSuggestions() {
   vec< Lit >  literals;
 
   stringstream cc;
+
+  DREAL_LOG_DEBUG << "hybrid_heuristic::getConflict(), stack_size = " << m_stack_lim.size();
+  displayStack();
   if(m_stack_lim.size() > 0){
-    int start = m_stack_lim[0];
-    for(int i = start; i < m_stack.size(); i++){
-	auto lit = m_stack[i];
+    for(int i = 0; i < m_stack_lim.size(); i++){
+      auto lit = m_stack[m_stack_lim[i]];
 	Enode* e = lit->first;
 	//bool sign = lit->second;
 	Lit l = (!lit->second ? theory_handler->enodeToLit(e) : ~theory_handler->enodeToLit(e));

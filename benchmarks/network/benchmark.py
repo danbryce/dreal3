@@ -6,7 +6,7 @@ import re
 from subprocess import Popen, PIPE, call
 
 
-timeout = 20*60 # 10 Minute timeout
+timeout = 20*60 # 20 Minute timeout
 break_on_sat = False
 break_on_timeout = True
 
@@ -211,17 +211,17 @@ if __name__ == '__main__':
 						  ],
 						  [
 							("gen", "Generator SAT", "GEN 1", "gen-1-sat", ".drh", "sat", True, (1, 8)),
-							("gen", "Generator SAT", "GEN 1", "gen-2-sat", ".drh", "sat", True, (1, 16)),
-							("gen", "Generator SAT", "GEN 1", "gen-3-sat", ".drh", "sat", True, (1, 24)),
-							("gen", "Generator SAT", "GEN 1", "gen-4-sat", ".drh", "sat", True, (1, 32)),
-							("gen", "Generator SAT", "GEN 1", "gen-5-sat", ".drh", "sat", True, (1, 40))
+							("gen", "Generator SAT", "GEN 2", "gen-2-sat", ".drh", "sat", True, (1, 16)),
+							("gen", "Generator SAT", "GEN 3", "gen-3-sat", ".drh", "sat", True, (1, 24)),
+							("gen", "Generator SAT", "GEN 4", "gen-4-sat", ".drh", "sat", True, (1, 32)),
+							("gen", "Generator SAT", "GEN 5", "gen-5-sat", ".drh", "sat", True, (1, 40))
 						  ],
 						  [
 							("gen", "Generator UNSAT", "GEN 1", "gen-1-unsat", ".drh", "unsat", True, (1, 8)),
-							("gen", "Generator UNSAT", "GEN 1", "gen-2-unsat", ".drh", "unsat", True, (1, 16)),
-							("gen", "Generator UNSAT", "GEN 1", "gen-3-unsat", ".drh", "unsat", True, (1, 24)),
-							("gen", "Generator UNSAT", "GEN 1", "gen-4-unsat", ".drh", "unsat", True, (1, 32)),
-							("gen", "Generator UNSAT", "GEN 1", "gen-5-unsat", ".drh", "unsat", True, (1, 40))
+							("gen", "Generator UNSAT", "GEN 2", "gen-2-unsat", ".drh", "unsat", True, (1, 16)),
+							("gen", "Generator UNSAT", "GEN 3", "gen-3-unsat", ".drh", "unsat", True, (1, 24)),
+							("gen", "Generator UNSAT", "GEN 4", "gen-4-unsat", ".drh", "unsat", True, (1, 32)),
+							("gen", "Generator UNSAT", "GEN 5", "gen-5-unsat", ".drh", "unsat", True, (1, 40))
 						  ],
 						#  [
 						#	("airplane", "Airplane", "UNSAT", "airplane", ".drh", "unsat", False, (1, 5)),
@@ -306,6 +306,8 @@ if __name__ == '__main__':
 			
 			benchmark_path = os.path.dirname(main_path + '/' + folder + '/')
 			
+			f = open(benchmark_path + '/' + gen + '_output.txt', 'w')
+			
 			normal_and_heuristic = []
 			
 			for z in range(0, 2):
@@ -316,6 +318,8 @@ if __name__ == '__main__':
 					
 				results_sub = []
 				final_bound = 0
+				
+				f.write('# Heuristic = ' + str(heuristic) + '\n')
 				
 				for x in range (min_bound, max_bound + 1):
 					final_bound = x
@@ -356,6 +360,8 @@ if __name__ == '__main__':
 					if not bench_result[0]:
 						print((x, bench_result[1], bench_result[3], bench_result[2]))
 						results_sub.append((x, bench_result[1], bench_result[3], bench_result[2]))
+						f.write(str(x) + ': ' + 'Result = ' + bench_result[1] + ', SAT Nodes = ' + bench_result[2] + ', Time = ' + bench_result[3] + '\n')
+						f.flush()
 					else:
 						if break_on_timeout:
 							break
@@ -364,6 +370,7 @@ if __name__ == '__main__':
 						break
 				normal_and_heuristic.append(((min_bound, final_bound), results_sub))
 				print(normal_and_heuristic)
+			f.close()
 			results_series.append((sub_series_description, normal_and_heuristic))
 		write_latex_tables([get_latex_table(results_series, description)], main_path, 'series_' + description)
 		#results.append(results_series)

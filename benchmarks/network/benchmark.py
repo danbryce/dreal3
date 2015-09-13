@@ -78,15 +78,26 @@ def preprocess_drh(path, drhfilename):
 	f_content = f.read()
 	f.close()
 	f_content_lines = f_content.splitlines()
-	f_definitions = filter(lambda x: '#define' in x, f_content_lines)
-	f_no_definitions = filter(lambda x: not ('#define' in x), f_content_lines)
-	f_no_definitions = ''.join((e + '\n') for e in f_no_definitions)
-	f_definitions = [map(str.strip, s.strip().split()) for s in f_definitions]
-	for s in f_definitions:
-		f_no_definitions = f_no_definitions.replace(s[1], s[2])
-		
+	
+	# Remove comments
+	for i in range(0, len(f_content_lines)):
+		line = f_content_lines[i]
+		idx = str.find(line, '//')
+		if idx != -1:
+			line = line[0..idx]
+		f_content_lines[i] = line
+	
+	# Recreate content without comments
+	f_no_comments = ''.join((e + '\n') for e in f_content_lines)
+	
+	# Call cpp and pipe content as input
+	p = Popen(['cpp', '-P', '-w'], stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=path)
+	proc_std = p.communicate(input=f_no_comments)[0]
+	proc_ret = p.returncode
+
+	# Write output to file
 	f = open(path + '/' + drhfilename + '.preprocessed.drh', 'w')
-	f.write(f_no_definitions)
+	f.write(proc_std.decode())
 	f.flush()
 	f.close()
 
@@ -197,18 +208,18 @@ if __name__ == '__main__':
 					   #     ("thermostat", "Thermostat Triple", "N SAT", "thermostat-triple-network", ".drh", "unsat", True, (1, 1)),
 					   #     ("thermostat", "Thermostat Triple", "N UNSAT", "thermostat-triple-network-sat", ".drh", "sat", True, (1, 1))
 					   #   ],
-				          [
-					        
-					        ("thermostat", "Thermostat Double SAT", "Old", "thermostat-double-sat", ".drh", "sat", False, (1, 5)),
-					        ("thermostat", "Thermostat Double SAT", "New", "thermostat-double-i-p-sat", ".py", "sat", False, (1, 5)),
-					        ("thermostat", "Thermostat Double SAT", "Net", "thermostat-double-network-sat", ".drh", "sat", True, (1, 5))
-					      ],
-						  [
-							("thermostat", "Thermostat Double UNSAT", "Old", "thermostat-double", ".drh", "unsat", False, (1, 5)),
-							("thermostat", "Thermostat Double UNSAT", "New", "thermostat-double-i-p", ".py", "unsat", False, (1, 5)),
-							("thermostat", "Thermostat Double UNSAT", "Net", "thermostat-double-network", ".drh", "unsat", True, (1, 5))
-							  
-						  ],
+				       #   [
+					   #     
+					   #     ("thermostat", "Thermostat Double SAT", "Old", "thermostat-double-sat", ".drh", "sat", False, (1, 5)),
+					   #     ("thermostat", "Thermostat Double SAT", "New", "thermostat-double-i-p-sat", ".py", "sat", False, (1, 5)),
+					   #     ("thermostat", "Thermostat Double SAT", "Net", "thermostat-double-network-sat", ".drh", "sat", True, (1, 5))
+					   #   ],
+					   #  [
+						#	("thermostat", "Thermostat Double UNSAT", "Old", "thermostat-double", ".drh", "unsat", False, (1, 5)),
+						#	("thermostat", "Thermostat Double UNSAT", "New", "thermostat-double-i-p", ".py", "unsat", False, (1, 5)),
+						#	("thermostat", "Thermostat Double UNSAT", "Net", "thermostat-double-network", ".drh", "unsat", True, (1, 5))
+						#	  
+						 # ],
 						  [
 							("gen", "Generator SAT", "GEN 1", "gen-1-sat", ".drh", "sat", True, (1, 8)),
 							("gen", "Generator SAT", "GEN 2", "gen-2-sat", ".drh", "sat", True, (1, 16)),

@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -27,15 +27,15 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <cstdio>
 #include <csignal>
 #include <iostream>
-#include <glog/logging.h>
-#include <gflags/gflags.h>
+#include <ezOptionParser/ezOptionParser.hpp>
 #include "util/git_sha1.h"
+#include "util/logging.h"
 
 #if defined(__linux__)
 #include <fpu_control.h>
 #endif
 
-using std::stringstream;
+using std::ostringstream;
 
 namespace opensmt {
 
@@ -50,6 +50,8 @@ extern bool stop;
 // extern int  cnfparse           ( );
 extern int  smt2set_in         ( FILE * );
 extern int  smt2parse          ( );
+extern int  smt2lex_destroy    ( );
+
 extern OpenSMTContext * parser_ctx;
 
 /*****************************************************************************\
@@ -58,20 +60,15 @@ extern OpenSMTContext * parser_ctx;
  *                                                                           *
 \*****************************************************************************/
 
-int main( int argc, char * argv[] )
+int main( int argc, const char * argv[] )
 {
-  // Init Google Logging
-  google::InitGoogleLogging(argv[0]);
-
+#ifdef LOGGING
+  START_EASYLOGGINGPP(argc, argv);
+#endif
   // Set up version, usage message
-  stringstream ss;
+  ostringstream ss;
   ss << PACKAGE_VERSION
      << " (commit " << string(dreal::getGitSHA1()).substr(0, 12) << ")";
-  gflags::SetVersionString(ss.str());
-  gflags::SetUsageMessage(argv[0]);
-
-  // Parse cmd-line, it will update argc and argv
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   opensmt::stop = false;
   // Allocates Command Handler (since SMT-LIB 2.0)
@@ -81,15 +78,16 @@ int main( int argc, char * argv[] )
   signal( SIGINT , opensmt::catcher );
   // Initialize pointer to context for parsing
   parser_ctx    = &context;
-  const char * filename = argv[ argc - 1 ];
+  const char * filename = context.getConfig().filename.c_str();
   assert( filename );
   // Accepts file from stdin if nothing specified
   FILE * fin = NULL;
   // Make sure file exists
-  if ( argc == 1 )
+  if ( context.getConfig().filename == "output" )
     fin = stdin;
-  else if ( (fin = fopen( filename, "rt" )) == NULL )
-    opensmt_error( "can't open file" );
+  else if ( (fin = fopen( filename, "rt" )) == NULL ) {
+    opensmt_error2( "can't open file", filename );
+  }
 
   // Parse
   // Parse according to filetype
@@ -124,14 +122,14 @@ int main( int argc, char * argv[] )
       opensmt_error2( extension, " extension not recognized. Please use one in { smt2, cnf } or stdin (smtlib2 is assumed)" );
     }
   }
-
+  smt2lex_destroy();
   fclose( fin );
 
 #ifndef SMTCOMP
   if ( context.getConfig( ).verbosity > 0 )
   {
     const int len_pack = strlen( PACKAGE_STRING );
-    const char * site = "http://verify.inf.usi.ch/opensmt";
+    const char * site = "https://dreal.github.io";
     const int len_site = strlen( site );
 
     cerr << "#" << endl

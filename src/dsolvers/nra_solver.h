@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "opensmt/egraph/Egraph.h"
 #include "opensmt/tsolvers/TSolver.h"
 #include "util/box.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "contractor/contractor.h"
 #include "util/logging.h"
 #include "util/scoped_vec.h"
@@ -72,11 +72,6 @@ public:
     void  computeModel();
 
 private:
-    // std::unordered_map<std::string, ibex::Variable const> m_var_map;
-    // std::unordered_map<Enode*, ibex::ExprCtr const *> m_lit_ctr_map;
-    // std::unordered_map<Enode*, ibex::Ctc *> m_lit_ctc_map;
-    // std::unordered_set<Enode *> m_var_set;
-    // std::vector<Enode *> m_var_vec;  // unsigned int -> Enode* (Variable)
     bool m_need_init = true;
     std::vector<Enode *> m_lits;
     scoped_vec<constraint *>  m_stack;
@@ -87,7 +82,7 @@ private:
 
     contractor m_ctc;
     box m_box;
-    stat m_stat;
+    mutable stat m_stat;
 
     contractor build_contractor(box const & box, scoped_vec<constraint *> const & ctrs, bool const complete);
     std::vector<constraint *> initialize_constraints();

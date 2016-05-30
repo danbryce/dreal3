@@ -36,7 +36,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "ibex/ibex.h"
 #include "opensmt/egraph/Enode.h"
 #include "util/box.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "util/ibex_enode.h"
 #include "util/logging.h"
 #include "util/proof.h"
@@ -48,23 +48,25 @@ using std::initializer_list;
 using std::unordered_set;
 using std::vector;
 using std::queue;
+using std::ostringstream;
 
 namespace dreal {
-ibex::SystemFactory* build_system_factory(box const & box, vector<nonlinear_constraint const *> const & ctrs) {
+ibex::SystemFactory* contractor_ibex_polytope::build_system_factory(vector<Enode *> const & vars, vector<nonlinear_constraint const *> const & ctrs) {
     DREAL_LOG_DEBUG << "build_system_factory:";
     ibex::SystemFactory * sf = new ibex::SystemFactory();
     unordered_map<string, ibex::Variable const> var_map;  // Needed for translateEnodeToExprCtr
+
     // Construct System: add Variables
-    thread_local static unordered_map<Enode*, ibex::Variable const *> tls_var_cache;
-    for (Enode * e : box.get_vars()) {
+    for (Enode * e : vars) {
         string const & name = e->getCar()->getName();
         DREAL_LOG_INFO << "build_system_factory: Add Variable " << name;
-        auto var_it = tls_var_cache.find(e);
+        auto var_it = m_var_cache.find(e);
         ibex::Variable const * var = nullptr;
-        if (var_it == tls_var_cache.end()) {
+        if (var_it == m_var_cache.end()) {
             // Not found
             var = new ibex::Variable(name.c_str());
-            tls_var_cache.emplace(e, var);
+            DREAL_LOG_INFO << "Added: var " << var << endl;
+            m_var_cache.emplace(e, var);
         } else {
             // Found
             var = var_it->second;
@@ -73,21 +75,21 @@ ibex::SystemFactory* build_system_factory(box const & box, vector<nonlinear_cons
         sf->add_var(*var);
     }
     DREAL_LOG_DEBUG << "build_system_factory: Add Variable: DONE";
+
     // Construct System: add constraints
-    thread_local static unordered_map<Enode *, ibex::ExprCtr const *> tls_exprctr_cache_pos;
-    thread_local static unordered_map<Enode *, ibex::ExprCtr const *> tls_exprctr_cache_neg;
     for (nonlinear_constraint const * ctr : ctrs) {
         DREAL_LOG_INFO << "build_system_factory: Add Constraint: " << *ctr;
-        Enode * e = ctr->get_enodes()[0];
+        Enode * e = ctr->get_enode();
         auto p = e->getPolarity();
         assert(p == l_True || p == l_False);
-        auto & tls_exprctr_cache = (p == l_True) ? tls_exprctr_cache_pos : tls_exprctr_cache_neg;
-        auto exprctr_it = tls_exprctr_cache.find(e);
+        auto & m_exprctr_cache = (p == l_True) ? m_exprctr_cache_pos : m_exprctr_cache_neg;
+        auto exprctr_it = m_exprctr_cache.find(e);
         ibex::ExprCtr const * exprctr = nullptr;
-        if (exprctr_it == tls_exprctr_cache.end()) {
+        if (exprctr_it == m_exprctr_cache.end()) {
             // Not found
             exprctr = translate_enode_to_exprctr(var_map, e);
-            tls_exprctr_cache.emplace(e, exprctr);
+            m_exprctr_cache.emplace(e, exprctr);
+            DREAL_LOG_INFO << "Added: exprctr " << p << " " << exprctr << endl;
         } else {
             // Found
             exprctr = exprctr_it->second;
@@ -152,6 +154,7 @@ contractor_ibex_fwdbwd::~contractor_ibex_fwdbwd() {
     delete m_ctc;
 }
 box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
+    DREAL_LOG_DEBUG << "contractor_ibex_fwdbwd::prune";
     if (m_ctc == nullptr) { return b; }
 
     // ======= Proof =======
@@ -159,6 +162,17 @@ box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
     if (config.nra_proof) { old_box = b; }
 
     DREAL_LOG_DEBUG << "==================================================";
+
+    if (m_var_array.size() == 0) {
+        auto eval_result = m_ctr->eval(b);
+        if (eval_result.first == l_False) {
+            b.set_empty();
+            return b;
+        } else {
+            return b;
+        }
+    }
+
     // Construct iv from box b
     ibex::IntervalVector iv(m_var_array.size());
     for (int i = 0; i < m_var_array.size(); i++) {
@@ -182,6 +196,7 @@ box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
         }
     }
     ibex::BitSet const * const output = m_ctc->output;
+    m_output.clear();
     for (unsigned i = 0; i <  output->size(); i++) {
         if ((*output)[i]) {
             m_output.add(b.get_index(m_var_array[i].name));
@@ -193,8 +208,8 @@ box contractor_ibex_fwdbwd::prune(box b, SMTConfig & config) const {
 
     // ======= Proof =======
     if (config.nra_proof) {
-        stringstream ss;
-        Enode const * const e = m_ctr->get_enodes()[0];
+        ostringstream ss;
+        Enode const * const e = m_ctr->get_enode();
         ss << (e->getPolarity() == l_False ? "!" : "") << e;
         output_pruning_step(config.nra_proof_out, old_box, b, config.nra_readable_proof, ss.str());
     }
@@ -209,8 +224,11 @@ ostream & contractor_ibex_fwdbwd::display(ostream & out) const {
     return out;
 }
 
-void contractor_ibex_polytope::init(box const & box) const {
-    m_sf = build_system_factory(box, m_ctrs);
+contractor_ibex_polytope::contractor_ibex_polytope(double const prec, vector<Enode *> const & vars, vector<nonlinear_constraint const *> const & ctrs)
+    : contractor_cell(contractor_kind::IBEX_POLYTOPE), m_ctrs(ctrs), m_prec(prec) {
+    // Trivial Case
+    if (m_ctrs.size() == 0) { return; }
+    m_sf = build_system_factory(vars, m_ctrs);
     m_sys = new ibex::System(*m_sf);
 
     unsigned index = 0;
@@ -241,17 +259,17 @@ void contractor_ibex_polytope::init(box const & box) const {
 
     // Setup Input
     // TODO(soonhok): this is a rough approximation, which needs to be refined.
-    m_input  = ibex::BitSet::all(box.size());
     m_used_constraints.insert(m_ctrs.begin(), m_ctrs.end());
-    DREAL_LOG_DEBUG << "contractor_ibex_polytope: DONE";
-}
+    m_input  = ibex::BitSet::empty(vars.size());
 
-contractor_ibex_polytope::contractor_ibex_polytope(double const prec, vector<nonlinear_constraint const *> const & ctrs)
-    : contractor_cell(contractor_kind::IBEX_POLYTOPE), m_ctrs(ctrs), m_prec(prec) {
+    for (nonlinear_constraint const * ctr : ctrs) {
+        unordered_set<Enode*> const & vars_in_ctr = ctr->get_enode()->get_vars();
+        m_vars_in_ctrs.insert(vars_in_ctr.begin(), vars_in_ctr.end());
+    }
+    DREAL_LOG_INFO << "contractor_ibex_polytope: DONE" << endl;
 }
 
 contractor_ibex_polytope::~contractor_ibex_polytope() {
-    DREAL_LOG_DEBUG << "~contractor_ibex_polytope: DELETED";
     delete m_lrc;
     for (ibex::Ctc * sub_ctc : m_sub_ctcs) {
         delete sub_ctc;
@@ -260,10 +278,28 @@ contractor_ibex_polytope::~contractor_ibex_polytope() {
     if (m_sys_eqs && m_sys_eqs != m_sys) { delete m_sys_eqs; }
     delete m_sys;
     delete m_sf;
+    for (auto p : m_exprctr_cache_pos) {
+        ibex::cleanup(p.second->e, false);
+        delete p.second;
+    }
+    for (auto p : m_exprctr_cache_neg) {
+        ibex::cleanup(p.second->e, false);
+        delete p.second;
+    }
+    for (auto p : m_var_cache) {
+        ibex::Variable const * var = p.second;
+        ibex::ExprSymbol* symbol = var->symbol;
+        delete var;
+        delete symbol;
+    }
 }
 
 box contractor_ibex_polytope::prune(box b, SMTConfig & config) const {
-    if (!m_ctc) { init(b); }
+    DREAL_LOG_DEBUG << "contractor_ibex_polytope::prune";
+    if (!m_ctc) { return b; }
+    for (Enode * var : m_vars_in_ctrs) {
+        m_input.add(b.get_index(var));
+    }
     thread_local static box old_box(b);
     old_box = b;
     m_ctc->contract(b.get_values());
@@ -277,9 +313,9 @@ box contractor_ibex_polytope::prune(box b, SMTConfig & config) const {
     }
     // ======= Proof =======
     if (config.nra_proof) {
-        stringstream ss;
+        ostringstream ss;
         for (auto const & ctr : m_ctrs) {
-            Enode const * const e = ctr->get_enodes()[0];
+            Enode const * const e = ctr->get_enode();
             ss << (e->getPolarity() == l_False ? "!" : "") << e << ";";
         }
         output_pruning_step(config.nra_proof_out, old_box, b, config.nra_readable_proof, ss.str());
@@ -295,19 +331,12 @@ ostream & contractor_ibex_polytope::display(ostream & out) const {
     return out;
 }
 
-contractor mk_contractor_ibex_polytope(double const prec, vector<nonlinear_constraint const *> const & ctrs) {
-    return contractor(make_shared<contractor_ibex_polytope>(prec, ctrs));
+contractor mk_contractor_ibex_polytope(double const prec, vector<Enode *> const & vars, vector<nonlinear_constraint const *> const & ctrs) {
+    return contractor(make_shared<contractor_ibex_polytope>(prec, vars, ctrs));
 }
 
 contractor mk_contractor_ibex_fwdbwd(box const & box, nonlinear_constraint const * const ctr) {
-    static thread_local unordered_map<nonlinear_constraint const *, contractor> cache;
-    auto const it = cache.find(ctr);
-    if (it == cache.cend()) {
-        contractor ctc(make_shared<contractor_ibex_fwdbwd>(box, ctr));
-        cache.emplace(ctr, ctc);
-        return ctc;
-    } else {
-        return it->second;
-    }
+    contractor ctc(make_shared<contractor_ibex_fwdbwd>(box, ctr));
+    return ctc;
 }
 }  // namespace dreal

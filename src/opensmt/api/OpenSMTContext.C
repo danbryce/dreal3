@@ -197,7 +197,7 @@ OpenSMTContext::executeCommands( )
     return 2;
 
   // Trick for efficiency
-  if ( nof_checksat == 1 )
+  if ( config.incremental == 0 && nof_checksat == 1 )
     ret_val = executeStatic( );
   // Normal incremental solving
   else
@@ -600,7 +600,21 @@ void OpenSMTContext::DeclareFun( const char * name, Snode * s )
          << s
          << endl;
 
-  egraph.newSymbol( name, s );
+  egraph.newSymbol( name, s, true );
+}
+
+void OpenSMTContext::DeclareFun( const char * name, Snode * s, const char * p )
+{
+  if ( config.verbosity > 1 )
+    cerr << "# OpenSMTContext::Declaring function "
+         << name
+         << " of sort "
+         << s
+         << " with precision = "
+         << p
+         << endl;
+  double const vval = strtod(p, nullptr);
+  egraph.newSymbol( name, s, true, vval );
 }
 
 void OpenSMTContext::DefineODE( char const * name, vector<pair<string, Enode *> *> * odes)
@@ -644,7 +658,8 @@ void OpenSMTContext::Assert( Enode * e )
   if ( config.verbosity > 1 )
   {
     if ( e->isBooleanOperator( ) )
-      cerr << "# OpenSMTContext::Asserting formula with id " << e->getId( ) << endl;
+        cerr << "# OpenSMTContext::Asserting formula " << e
+             << " with id " << e->getId( ) << endl;
     else
       cerr << "# OpenSMTContext::Asserting formula " << e << endl;
   }
@@ -698,6 +713,20 @@ lbool OpenSMTContext::CheckSAT( )
 
   if ( config.verbosity > 1 )
     cerr << "# OpenSMTContext::Processing: " << formula << endl;
+
+  // Removes ITEs if there is any
+  if ( egraph.hasItes( ) )
+  {
+#ifdef PRODUCE_PROOF
+    if ( config.produce_inter > 0 )
+      opensmt_error( "Interpolation not supported for ite construct" );
+#endif
+    ExpandITEs expander( egraph, config );
+    formula = expander.doit( formula );
+
+    if ( config.dump_formula != 0 )
+      egraph.dumpToFile( "ite_expanded.smt2", formula );
+  }
 
   state = cnfizer.cnfizeAndGiveToSolver( formula );
   if ( state == l_Undef )
@@ -926,7 +955,12 @@ void OpenSMTContext::addIntvCtr(const char* const op, Enode* const e, const char
         double const vval = strtod(v, nullptr);
         e->setDomainUpperBound(vval);
         e->setValueUpperBound(vval);
-        Enode * const leq = mkLeq(mkCons(e, mkCons(mkNum(v))));
+        Enode * leq = nullptr;
+        if(strcmp(op, "<=") == 0) {
+            leq = mkLeq(mkCons(e, mkCons(mkNum(v))));
+        } else {
+            leq = mkLt(mkCons(e, mkCons(mkNum(v))));
+        }
         if(d != nullptr){
             double const dval = strtod(d, nullptr);
             leq->setPrecision(dval);
@@ -938,7 +972,12 @@ void OpenSMTContext::addIntvCtr(const char* const op, Enode* const e, const char
         double const vval = strtod(v, nullptr);
         e->setDomainLowerBound(vval);
         e->setValueLowerBound(vval);
-        Enode * const geq = mkGeq(mkCons(e, mkCons(mkNum(v))));
+        Enode * geq = nullptr;
+        if(strcmp(op, ">=") == 0) {
+            geq = mkGeq(mkCons(e, mkCons(mkNum(v))));
+        } else {
+            geq = mkGt(mkCons(e, mkCons(mkNum(v))));
+        }
         if(d != nullptr){
             double const dval = strtod(d, nullptr);
             geq->setPrecision(dval);
@@ -951,13 +990,15 @@ void OpenSMTContext::addIntvCtr(const char* const op, Enode* const e, const char
 }
 
 void OpenSMTContext::addIntvCtrR(const char* const op, const char * v, Enode * const e, const char * d) {
-    if(strcmp(op, "<=") == 0 || strcmp(op, "<") == 0) {
-        addIntvCtr( ">=", e, v, d);
-    }
-    else if(strcmp(op, ">=") == 0 || strcmp(op, ">" ) == 0) {
-        addIntvCtr( "<=", e, v, d);
-    }
-    else {
+    if(strcmp(op, "<=") == 0) {
+        addIntvCtr(">=", e, v, d);
+    } else if(strcmp(op, "<") == 0) {
+        addIntvCtr(">", e, v, d);
+    } else if(strcmp(op, ">=") == 0) {
+        addIntvCtr("<=", e, v, d);
+    } else if(strcmp(op, ">") == 0) {
+        addIntvCtr("<", e, v, d);
+    } else {
         opensmt_error2( "command not supported (yet)", "" );
     }
 }

@@ -69,7 +69,7 @@ void smt2error( const char * s )
 
 %token TK_NUM TK_DEC TK_HEX TK_STR TK_SYM TK_KEY TK_BIN
 %token TK_BOOL
-%token TK_DDT TK_LB TK_RB
+%token TK_DDT TK_LB TK_RB TK_COMMA
 %token TK_SETLOGIC TK_SETINFO TK_SETOPTION TK_DECLARESORT TK_DEFINESORT TK_DECLAREFUN TK_DECLARECONST
 %token TK_PUSH TK_POP TK_CHECKSAT TK_GETASSERTIONS TK_GETPROOF TK_GETUNSATCORE TK_GETINTERPOLANTS
 %token TK_GETVALUE TK_GETASSIGNMENT TK_GETOPTION TK_GETINFO TK_EXIT
@@ -157,8 +157,52 @@ command: '(' TK_SETLOGIC symbol ')'
          }
        | '(' TK_DECLAREFUN symbol '(' ')' sort ')'
          {
-            parser_ctx->DeclareFun( $3, $6 ); free( $3 );
-          }
+           parser_ctx->DeclareFun( $3, $6 ); free( $3 );
+         }
+       | '(' TK_DECLAREFUN symbol '(' ')' sort TK_LB spec_const TK_COMMA spec_const TK_RB ')'
+         {
+           parser_ctx->DeclareFun( $3, $6 );
+           double const lb = strtod($8, nullptr);
+           double const ub = strtod($10, nullptr);
+
+           Enode * e = parser_ctx->mkVar($3);
+           e->setDomainLowerBound(lb);
+           e->setDomainUpperBound(ub);
+           e->setValueLowerBound(lb);
+           e->setValueUpperBound(ub);
+           free( $3 ); free($8); free($10);
+         }
+
+
+| '(' TK_DECLAREFUN TK_EXISTS symbol '(' ')' sort TK_LB spec_const TK_COMMA spec_const TK_RB ')'
+         {
+           parser_ctx->DeclareFun( $4, $7 );
+           double const lb = strtod($9, nullptr);
+           double const ub = strtod($11, nullptr);
+           Enode * e = parser_ctx->mkVar($4);
+           e->setDomainLowerBound(lb);
+           e->setDomainUpperBound(ub);
+           e->setValueLowerBound(lb);
+           e->setValueUpperBound(ub);
+           free( $4 ); free($9); free($11);
+         }
+       | '(' TK_DECLAREFUN TK_FORALL symbol '(' ')' sort TK_LB spec_const TK_COMMA spec_const TK_RB ')'
+         {
+           parser_ctx->DeclareFun( $4, $7 );
+           double const lb = strtod($9, nullptr);
+           double const ub = strtod($11, nullptr);
+           Enode * e = parser_ctx->mkVar($4);
+           e->setDomainLowerBound(lb);
+           e->setDomainUpperBound(ub);
+           e->setValueLowerBound(lb);
+           e->setValueUpperBound(ub);
+           e->setForallVar();
+           free( $4 ); free($9); free($11);
+         }
+       | '(' TK_DECLAREFUN symbol '(' ')' sort TK_LB spec_const TK_RB ')'
+         {
+             parser_ctx->DeclareFun( $3, $6, $8 ); free( $3 ); free ( $8 );
+         }
        | '(' TK_DECLARECONST symbol sort ')'
          {
             parser_ctx->DeclareFun( $3, $4 ); free( $3 );
@@ -269,7 +313,7 @@ command: '(' TK_SETLOGIC symbol ')'
 precision: TK_LB spec_const TK_RB
            { $$ = $2; }
            |
-           { $$ = NULL; }
+           { $$ = nullptr; }
            ;
 
 s_expr: spec_const
@@ -330,10 +374,8 @@ sort: TK_BOOL
     ;
 
 sorted_var: '(' TK_SYM sort ')' {
-        $$ = new pair<string, Snode *>;
-        $$->first = $2;
-        $$->second = $3;
-        free($2);
+    $$ = new pair<string, Snode *>($2, $3);
+    free($2);
 }
 
 term: spec_const
@@ -348,15 +390,40 @@ term: spec_const
     | TK_FALSE
       { $$ = parser_ctx->mkFalse( ); }
     | '(' TK_AND term_list ')'
-      { $$ = parser_ctx->mkAnd( $3 ); }
+      {
+          $$ = parser_ctx->mkAnd( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: and");
+          }
+      }
     | '(' TK_OR term_list ')'
-      { $$ = parser_ctx->mkOr( $3 ); }
+      {
+          $$ = parser_ctx->mkOr( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: or");
+          }
+      }
     | '(' TK_XOR term_list ')'
-      { $$ = parser_ctx->mkXor( $3 ); }
+      {
+          $$ = parser_ctx->mkXor( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: xor");
+          }
+      }
     | '(' TK_NOT term_list ')'
-      { $$ = parser_ctx->mkNot( $3 ); }
+      {
+          $$ = parser_ctx->mkNot( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: not");
+          }
+      }
     | '(' TK_IMPLIES term_list ')'
-      { $$ = parser_ctx->mkImplies( $3 ); }
+      {
+          $$ = parser_ctx->mkImplies( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: =>");
+          }
+      }
 
     | '(' TK_EQ TK_LB term_list TK_RB
                 '(' TK_INTEGRAL term term TK_LB term_list TK_RB identifier ')'
@@ -367,57 +434,106 @@ term: spec_const
       }
     | '(' TK_EQ term_list precision ')'
       { $$ = parser_ctx->mkEq( $3 );
-        if( $4 != NULL ) {
+        if ($$ == nullptr) {
+          yyerror("Parse Error: =");
+        }
+        if( $4 != nullptr ) {
           $$->setPrecision( atof($4) );
           free($4);
         }
       }
     | '(' TK_ITE term_list ')'
-      { $$ = parser_ctx->mkIte( $3 ); }
+      {
+          $$ = parser_ctx->mkIte( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: ite");
+          }
+      }
     | '(' TK_PLUS term_list ')'
-      { $$ = parser_ctx->mkPlus( $3 ); }
+      {
+          $$ = parser_ctx->mkPlus( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: +");
+          }
+      }
     | '(' TK_MINUS term_list ')'
-      { $$ = parser_ctx->mkMinus( $3 ); }
+      {
+          $$ = parser_ctx->mkMinus( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: -");
+          }
+      }
     | '(' TK_TIMES term_list ')'
-      { $$ = parser_ctx->mkTimes( $3 ); }
+      {
+          $$ = parser_ctx->mkTimes( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: *");
+          }
+      }
     | '(' TK_UMINUS term_list ')'
       { $$ = parser_ctx->mkUminus( $3 ); }
     | '(' TK_DIV term_list ')'
       { $$ = parser_ctx->mkDiv( $3 ); }
     | '(' TK_LEQ term_list precision ')'
       { $$ = parser_ctx->mkLeq( $3 );
-        if( $4 != NULL ) {
+        if ($$ == nullptr) {
+          yyerror("Parse Error: <=");
+        }
+        if( $4 != nullptr ) {
           $$->setPrecision( atof($4) );
         }
       }
     | '(' TK_GEQ term_list precision ')'
-      { $$ = parser_ctx->mkGeq( $3 );
-        if( $4 != NULL ) {
-          $$->setPrecision( atof($4) );
-        }
+      {
+          $$ = parser_ctx->mkGeq( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: >=");
+          }
+          if( $4 != nullptr ) {
+              $$->setPrecision( atof($4) );
+          }
       }
     | '(' TK_LT term_list precision ')'
-      { $$ = parser_ctx->mkLt( $3 );
-        if( $4 != NULL ) {
-          $$->setPrecision( atof($4) );
-        }
+      {
+          $$ = parser_ctx->mkLt( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: <");
+          }
+          if( $4 != nullptr ) {
+              $$->setPrecision( atof($4) );
+          }
       }
     | '(' TK_GT term_list precision ')'
-      { $$ = parser_ctx->mkGt( $3 );
-        if( $4 != NULL ) {
-          $$->setPrecision( atof($4) );
-        }
+      {
+          $$ = parser_ctx->mkGt( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: >");
+          }
+          if( $4 != nullptr ) {
+              $$->setPrecision( atof($4) );
+          }
       }
     | '(' TK_DISTINCT term_list ')'
-      { $$ = parser_ctx->mkDistinct( $3 ); }
+      {
+          $$ = parser_ctx->mkDistinct( $3 );
+          if ($$ == nullptr) {
+              yyerror("Parse Error: distinct");
+          }
+      }
     | '(' TK_LET '(' var_binding_list ')' term ')'
       { $$ = $6; }
     | '(' TK_FORALLT term TK_LB term term TK_RB term_list ')'
       { $$ = parser_ctx->mkForallT($3, $5, $6, $8); }
     | '(' TK_FORALL '(' sorted_var_list ')' term ')'
-      { $$ = parser_ctx->mkForall($4, $6); }
+      {
+          $$ = parser_ctx->mkForall($4, $6);
+          delete $4;
+      }
     | '(' TK_EXISTS '(' sorted_var_list ')' term ')'
-      { $$ = parser_ctx->mkExists($4, $6); }
+      {
+          $$ = parser_ctx->mkExists($4, $6);
+          delete $4;
+      }
     /*
     | '(' TK_ANNOT term attribute_list ')'
       { opensmt_error2( "case not handled (yet)", "" ); }
@@ -439,61 +555,137 @@ term: spec_const
 
     /* added for dReal2 */
     | '(' TK_ABS term_list ')'
-      { $$ = parser_ctx->mkAbs( $3 ); }
+      { $$ = parser_ctx->mkAbs( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: abs");
+        }
+      }
 
     | '(' TK_SIN term_list ')'
-      { $$ = parser_ctx->mkSin( $3 ); }
+      { $$ = parser_ctx->mkSin( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: sin");
+        }
+      }
 
     | '(' TK_COS term_list ')'
-      { $$ = parser_ctx->mkCos( $3 ); }
+      { $$ = parser_ctx->mkCos( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: cos");
+        }
+      }
 
     | '(' TK_TAN term_list ')'
-      { $$ = parser_ctx->mkTan( $3 ); }
+      { $$ = parser_ctx->mkTan( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: tan");
+        }
+      }
 
     | '(' TK_ASIN term_list ')'
-      { $$ = parser_ctx->mkAsin( $3 ); }
+      { $$ = parser_ctx->mkAsin( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: asin");
+        }
+      }
 
     | '(' TK_ACOS term_list ')'
-      { $$ = parser_ctx->mkAcos( $3 ); }
+      { $$ = parser_ctx->mkAcos( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: acos");
+        }
+      }
 
     | '(' TK_ATAN term_list ')'
-      { $$ = parser_ctx->mkAtan( $3 ); }
+      { $$ = parser_ctx->mkAtan( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: atan");
+        }
+      }
 
     | '(' TK_SINH term_list ')'
-      { $$ = parser_ctx->mkSinh( $3 ); }
+      { $$ = parser_ctx->mkSinh( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: sinh");
+        }
+      }
 
     | '(' TK_COSH term_list ')'
-      { $$ = parser_ctx->mkCosh( $3 ); }
+      { $$ = parser_ctx->mkCosh( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: cosh");
+        }
+      }
 
     | '(' TK_TANH term_list ')'
-      { $$ = parser_ctx->mkTanh( $3 ); }
+      { $$ = parser_ctx->mkTanh( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: tanh");
+        }
+      }
 
     | '(' TK_ATAN2 term_list ')'
-      { $$ = parser_ctx->mkAtan2( $3 ); }
+      { $$ = parser_ctx->mkAtan2( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: atan2");
+        }
+      }
 
     | '(' TK_MIN term_list ')'
-      { $$ = parser_ctx->mkMin( $3 ); }
+      { $$ = parser_ctx->mkMin( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: min");
+        }
+      }
 
     | '(' TK_MAX term_list ')'
-      { $$ = parser_ctx->mkMax( $3 ); }
+      { $$ = parser_ctx->mkMax( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: max");
+        }
+      }
 
     | '(' TK_MATAN term_list ')'
-      { $$ = parser_ctx->mkMatan( $3 ); }
+      { $$ = parser_ctx->mkMatan( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: matan");
+        }
+      }
 
     | '(' TK_SQRT term_list ')'
-      { $$ = parser_ctx->mkSqrt( $3 ); }
+      { $$ = parser_ctx->mkSqrt( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: sqrt");
+        }
+      }
 
     | '(' TK_SAFESQRT term_list ')'
-      { $$ = parser_ctx->mkSafeSqrt( $3 ); }
+      { $$ = parser_ctx->mkSafeSqrt( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: safesqrt");
+        }
+      }
 
     | '(' TK_EXP term_list ')'
-      { $$ = parser_ctx->mkExp( $3 ); }
+      { $$ = parser_ctx->mkExp( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: exp");
+        }
+      }
 
     | '(' TK_LOG term_list ')'
-      { $$ = parser_ctx->mkLog( $3 ); }
+      { $$ = parser_ctx->mkLog( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: log");
+        }
+      }
 
     | '(' TK_POW term_list ')'
-      { $$ = parser_ctx->mkPow( $3 ); }
+      { $$ = parser_ctx->mkPow( $3 );
+        if ($$ == nullptr) {
+          yyerror("Parse Error: pow");
+        }
+      }
     ;
 
 sort_list: sort_list sort

@@ -48,7 +48,9 @@ namespace dreal {
     theory_handler = thandler;
     trail = trl;
     trail_lim = trl_lim;
+    m_config = &c;
     m_is_initialized = true;
+    
     if (c.nra_plan_heuristic.compare("") != 0) {
         const string heuristic_string = get_file_contents(c.nra_plan_heuristic.c_str());
         string err;
@@ -777,9 +779,9 @@ bool plan_heuristic::unwind_path() {
 
 
 
-  void plan_heuristic::getSuggestions()  {
+  bool plan_heuristic::getSuggestions()  {
     if (!m_suggestions.empty()) {
-      return;
+      return true;
     }
     DREAL_LOG_INFO << "plan_heuristic::getSuggestions()";
     displayTrail();
@@ -797,7 +799,7 @@ bool plan_heuristic::unwind_path() {
   // bool suggest_defaults = true;
 
    if(!m_suggestions.empty() && suggestion_consistent)  {
-     return;
+     return true;
    } else if(!suggestion_consistent || backtracked)  {
      path_possible = unwind_path();
    }
@@ -813,7 +815,7 @@ bool plan_heuristic::unwind_path() {
    }
 
    if (m_decision_stack.size() == 0)
-     return;
+     return false;
 
 
 
@@ -863,5 +865,6 @@ bool plan_heuristic::unwind_path() {
       //                       (e->getDecPolarity() == l_False ? " False" : " Unknown"))
       //                   << endl;
       //  }
+    return true;
 }
 }

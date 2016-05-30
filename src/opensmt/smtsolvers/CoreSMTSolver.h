@@ -44,6 +44,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "smtsolvers/SMTSolver.h"
 
 #include <cstdio>
+#include <sstream>
 
 #include "minisat/mtl/Vec.h"
 #include "minisat/mtl/Heap.h"
@@ -331,6 +332,7 @@ public:
         inline Enode *  getInterpolants( Clause * c )            { assert( clause_to_in.find( c ) != clause_to_in.end( ) ); return clause_to_in[ c ]; }
         inline void     setInterpolant ( Clause * c, Enode * e ) { clause_to_in[ c ] = e; }
 #endif
+        map<Enode *, bool> getBoolModel( );             // get Boolean Model
 
 protected:
 
@@ -648,7 +650,7 @@ inline void CoreSMTSolver::printRestrictedSMTClause( ostream & os, vec< Lit > & 
 {
   assert( c.size( ) > 0 );
   int nof_lits = 0;
-  stringstream s;
+  std::ostringstream s;
   for ( int i = 0 ; i < c.size( ) ; i++ )
   {
     Var v = var(c[i]);

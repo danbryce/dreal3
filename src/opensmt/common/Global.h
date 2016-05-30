@@ -21,6 +21,7 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #define GLOBAL_H
 
 #include <cassert>
+#include <chrono>
 #include <cstring>
 #include <vector>
 #include <map>
@@ -30,25 +31,11 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 #include <iostream>
 #include <fstream>
 #include <queue>
-//#include <ext/hash_map>
 #include <unordered_map>
-#define hash_map std::unordered_map
-
-//#include <ext/hash_set>
 #include <unordered_set>
-#define hash_set std::unordered_set
-
-//#include <ext/pb_ds/priority_queue.hpp>
 #include <queue>
-using std::priority_queue;
-
-//#include <ext/pb_ds/tag_and_trait.hpp>
-
-//#include <ext/algorithm>
 #include <algorithm>
-
 #include <sys/time.h>
-#include <sys/resource.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <limits.h>
@@ -56,27 +43,14 @@ using std::priority_queue;
 #define NEW_SPLIT           0
 #define NEW_SIMPLIFICATIONS 0
 
-#define opensmt_error( S )        { cerr << "# Error: " << S << " (triggered at " <<  __FILE__ << ", " << __LINE__ << ")" << endl; exit( 1 ); }
-#define opensmt_error2( S, T )    { cerr << "# Error: " << S << " " << T << " (triggered at " <<  __FILE__ << ", " << __LINE__ << ")" << endl; exit( 1 ); }
-#define opensmt_warning( S )      { cerr << "# Warning: " << S << endl; }
-#define opensmt_warning2( S, T )  { cerr << "# Warning: " << S << " " << T << endl; }
+#define opensmt_error( S )        { std::cerr << "# Error: " << S << " (triggered at " <<  __FILE__ << ", " << __LINE__ << ")" << std::endl; exit( 1 ); }
+#define opensmt_error2( S, T )    { std::cerr << "# Error: " << S << " " << T << " (triggered at " <<  __FILE__ << ", " << __LINE__ << ")" << std::endl; exit( 1 ); }
+#define opensmt_warning( S )      { std::cerr << "# Warning: " << S << std::endl; }
+#define opensmt_warning2( S, T )  { std::cerr << "# Warning: " << S << " " << T << std::endl; }
 
 #if ( __WORDSIZE == 64 )
 #define BUILD_64
 #endif
-
-using std::set;
-using std::map;
-using std::vector;
-using std::string;
-using std::pair;
-using std::make_pair;
-using std::list;
-
-//using __gnu_cxx::is_heap;
-//using __gnu_cxx::hash_map;
-//using __gnu_cxx::hash_set;
-//using __gnu_cxx::hash;
 
 /* #if defined( __GNUC__ ) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)) */
 /* using __gnu_pbds::priority_queue; */
@@ -86,14 +60,6 @@ using std::list;
 /* using pb_ds::priority_queue; */
 /* using pb_ds::pairing_heap_tag; */
 /* #endif */
-
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::ostream;
-using std::stringstream;
-using std::ofstream;
-using std::ifstream;
 
 #define USE_GMP        0
 #define FAST_RATIONALS 0
@@ -170,11 +136,13 @@ typedef enum
 // NEW_THEORY_INIT
 } logic_t;
 
+extern std::chrono::time_point<std::chrono::high_resolution_clock> g_epoch_time;
+
 static inline double cpuTime(void)
 {
-    struct rusage ru;
-    getrusage(RUSAGE_SELF, &ru);
-    return (double)ru.ru_utime.tv_sec + (double)ru.ru_utime.tv_usec / 1000000;
+    auto now = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = now - g_epoch_time;
+    return diff.count();
 }
 
 #if defined(__linux__)

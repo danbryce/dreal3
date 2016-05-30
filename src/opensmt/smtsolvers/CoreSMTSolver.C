@@ -93,6 +93,7 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
   , random_seed      (91648253)
   , progress_estimate(0)
   , remove_satisfied (true)
+  , fake_clause      (nullptr)
   , learnt_t_lemmata      (0)
   , perm_learnt_t_lemmata (0)
   , luby_i                (0)
@@ -375,10 +376,12 @@ void CoreSMTSolver::attachClause(Clause& c) {
 
 void CoreSMTSolver::detachClause(Clause& c) {
   assert(c.size() > 1);
-  assert(find(watches[toInt(~c[0])], &c));
-  assert(find(watches[toInt(~c[1])], &c));
-  remove(watches[toInt(~c[0])], &c);
-  remove(watches[toInt(~c[1])], &c);
+  if (find(watches[toInt(~c[0])], &c)) {
+    remove(watches[toInt(~c[0])], &c);
+  }
+  if (find(watches[toInt(~c[1])], &c)) {
+    remove(watches[toInt(~c[1])], &c);
+  }
   if (c.learnt()) learnts_literals -= c.size();
   else            clauses_literals -= c.size();
 }
@@ -623,6 +626,11 @@ Lit CoreSMTSolver::pickBranchLit(int polarity_mode, double random_var_freq)
     for( ;; )
     {
       Lit sugg = heuristic->getSuggestion( );
+      if(sugg == lit_Error){
+	DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Heuristic determined UNSAT!" << endl;
+	return sugg;
+      }
+      
       if(var(sugg) != var_Undef){
         DREAL_LOG_DEBUG << "CoreSMTSolver::pickBranchLit() Heuristic Suggested Decision: "
                         << sign(sugg) << " " << theory_handler->varToEnode(var(sugg))
@@ -1380,6 +1388,15 @@ CoreSMTSolver::pushBacktrackPoint( )
 #endif
 }
 
+// bool find(vec< Clause * > const & clauses, Clause * c) {
+//     for (int i = 0; clauses.size(); i++) {
+//       if (clauses[i] == c) {
+//         return true;
+//       }
+//     }
+//     return false;
+// }
+
   void
 CoreSMTSolver::popBacktrackPoint ( )
 {
@@ -1442,22 +1459,28 @@ CoreSMTSolver::popBacktrackPoint ( )
     else if ( op == NEWCLAUSE )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( clauses.last( ) == c );
-      clauses.pop( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        assert( clauses.last( ) == c );
+        clauses.pop( );
+        removeClause( *c );
+      }
     }
     else if ( op == NEWLEARNT )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      detachClause( *c );
-      detached.insert( c );
+      if (find(clauses, c)) {
+        detachClause( *c );
+        detached.insert( c );
+      }
     }
     else if ( op == NEWAXIOM )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( axioms.last( ) == c );
+      if (find(clauses, c)) {
+        assert( axioms.last( ) == c );
+        removeClause( *c );
+      }
       axioms.pop( );
-      removeClause( *c );
     }
 #ifdef PRODUCE_PROOF
     else if ( op == NEWPROOF )
@@ -1548,21 +1571,27 @@ CoreSMTSolver::reset( )
     else if ( op == NEWCLAUSE )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( clauses.last( ) == c );
-      clauses.pop( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        assert( clauses.last( ) == c );
+        clauses.pop( );
+        removeClause( *c );
+      }
     }
     else if ( op == NEWLEARNT )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      removeClause( *c );
+      if (find(clauses, c)) {
+        removeClause( *c );
+      }
     }
     else if ( op == NEWAXIOM )
     {
       Clause * c = (Clause *)undo_stack_elem.back( );
-      assert( axioms.last( ) == c );
+      if (find(clauses, c)) {
+        assert( axioms.last( ) == c );
+        removeClause( *c );
+      }
       axioms.pop( );
-      removeClause( *c );
     }
 #ifdef PRODUCE_PROOF
     else if ( op == NEWPROOF )
@@ -1587,7 +1616,9 @@ CoreSMTSolver::reset( )
   {
     Clause * c = learnts.last( );
     learnts.pop( );
-    removeClause( *c );
+    if (find(clauses, c)) {
+      removeClause( *c );
+    }
   }
 #ifdef PRODUCE_PROOF
   proof.reset( );
@@ -1651,6 +1682,7 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
 
     Clause* confl = propagate();
     if (confl != NULL){
+      DREAL_LOG_DEBUG << "Found conflict";
       // CONFLICT
       conflicts++; conflictC++;
       if (decisionLevel() == 0)
@@ -1793,6 +1825,60 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
             DREAL_LOG_INFO << "Found Model after # decisions " << decisions << endl;
           }
 
+	  if ( next == lit_Error)
+	    {
+	      //	      return l_False;
+	      Clause* confl = heuristic->getConflict( );
+	      if (confl != NULL){
+		DREAL_LOG_DEBUG << "Analyze Conflict";
+		// CONFLICT
+		conflicts++; conflictC++;
+		if (decisionLevel() == 0 || confl->size() == 0)
+		  return l_False;
+		
+		//      first = false;
+		learnt_clause.clear();
+		analyze(confl, learnt_clause, backtrack_level);
+		cancelUntil(backtrack_level);
+
+		assert(value(learnt_clause[0]) == l_Undef);
+
+		if (learnt_clause.size() == 1){
+		  uncheckedEnqueue(learnt_clause[0]);
+#ifdef PRODUCE_PROOF
+		  Clause * c = Clause_new( learnt_clause, false );
+		  proof.endChain( c );
+		  assert( units[ var(learnt_clause[0]) ] == NULL );
+		  units[ var(learnt_clause[0]) ] = proof.last( );
+#endif
+		}else{
+		  Clause * c = Clause_new( learnt_clause, true );
+#ifdef PRODUCE_PROOF
+		  proof.endChain( c );
+		  if ( config.incremental )
+		    {
+		      undo_stack_oper.push_back( NEWPROOF );
+		      undo_stack_elem.push_back( (void *)c );
+		    }
+#endif
+		  learnts.push(c);
+#ifndef SMTCOMP
+		  undo_stack_oper.push_back( NEWLEARNT );
+		  undo_stack_elem.push_back( (void *)c );
+#endif
+		  attachClause(*c);
+		  claBumpActivity(*c);
+		  uncheckedEnqueue(learnt_clause[0], c);
+		}
+		
+		varDecayActivity();
+		claDecayActivity();
+		DREAL_LOG_DEBUG << "Done Analyze Conflict";
+		
+	      }
+	      continue;
+	    }
+	  
           // Complete Call
           if ( next == lit_Undef )
           {

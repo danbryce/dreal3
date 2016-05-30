@@ -18,10 +18,15 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
 #include <fenv.h>
+#include <iomanip>
 #include "Enode.h"
 #include "util/string.h"
 
 using std::unordered_set;
+using std::cerr;
+using std::endl;
+using std::ostream;
+using std::string;
 
 //
 // Constructor for ENIL
@@ -487,7 +492,7 @@ void Enode::printSig( ostream & os )
 
 string Enode::stripName( string s ) const
 {
-  return s.substr( 0, s.find( ' ', 0 ) );
+  return s.substr( 0, s.find( " ", 0 ) );
 }
 
 unordered_set<Enode *> Enode::get_vars() {
@@ -508,6 +513,60 @@ unordered_set<Enode *> Enode::get_vars() {
         p = this;
         while (!p->isEnil()) {
             unordered_set<Enode *> const  & tmp_set = p->getCar()->get_vars();
+            result.insert(tmp_set.begin(), tmp_set.end());
+            p = p->getCdr();
+        }
+    } else if (isDef()) { /* do nothing */ }
+    else if (isEnil()) { /* do nothing */ }
+    else opensmt_error("unknown case value");
+    return result;
+}
+
+unordered_set<Enode *> Enode::get_exist_vars() {
+    // TODO(soonhok): need to support integral and forallt?
+    unordered_set<Enode *> result;
+    Enode const * p = nullptr;
+    if ( isSymb()) { /* do nothing */ }
+    else if (isNumb()) { /* do nothing */ }
+    else if (isTerm()) {
+        if ( isExistVar() ) { result.insert(this); }
+        p = this;
+        while (!p->isEnil()) {
+            unordered_set<Enode *> const & tmp_set = p->getCar()->get_exist_vars();
+            result.insert(tmp_set.begin(), tmp_set.end());
+            p = p->getCdr();
+        }
+    } else if (isList()) {
+        p = this;
+        while (!p->isEnil()) {
+            unordered_set<Enode *> const  & tmp_set = p->getCar()->get_exist_vars();
+            result.insert(tmp_set.begin(), tmp_set.end());
+            p = p->getCdr();
+        }
+    } else if (isDef()) { /* do nothing */ }
+    else if (isEnil()) { /* do nothing */ }
+    else opensmt_error("unknown case value");
+    return result;
+}
+
+unordered_set<Enode *> Enode::get_forall_vars() {
+    // TODO(soonhok): need to support integral and forallt?
+    unordered_set<Enode *> result;
+    Enode const * p = nullptr;
+    if ( isSymb()) { /* do nothing */ }
+    else if (isNumb()) { /* do nothing */ }
+    else if (isTerm()) {
+        if ( isForallVar() ) { result.insert(this); }
+        p = this;
+        while (!p->isEnil()) {
+            unordered_set<Enode *> const & tmp_set = p->getCar()->get_forall_vars();
+            result.insert(tmp_set.begin(), tmp_set.end());
+            p = p->getCdr();
+        }
+    } else if (isList()) {
+        p = this;
+        while (!p->isEnil()) {
+            unordered_set<Enode *> const  & tmp_set = p->getCar()->get_forall_vars();
             result.insert(tmp_set.begin(), tmp_set.end());
             p = p->getCdr();
         }

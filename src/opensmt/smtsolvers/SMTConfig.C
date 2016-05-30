@@ -19,42 +19,23 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 
 #include <sstream>
 #include <string>
-#include <gflags/gflags.h>
+#include <ezOptionParser/ezOptionParser.hpp>
 #include "SMTConfig.h"
 #include "config.h"
 #include "util/logging.h"
+#include "util/git_sha1.h"
 #include "version.h"
 
-using std::string;
+#ifdef LOGGING
+INITIALIZE_EASYLOGGINGPP
+#endif
 
-DEFINE_double(precision,          0.0, "precision");
-DEFINE_bool  (delta,            false, "use delta");
-DEFINE_bool  (delta_heuristic,  false, "delta heuristic");
-DEFINE_string(bmc_heuristic,       "", "bmc heuristic");
-DEFINE_string(plan_heuristic,      "", "plan heuristic");
-DEFINE_string(plan_domain,         "", "plan domain");
-DEFINE_string(plan_problem,        "", "plan problem");
-DEFINE_bool(output_num_nodes,   false, "ouput num nodes");
-DEFINE_bool  (short_sat,        false, "short sat");
-DEFINE_double(ode_step,           0.0, "ode step");
-DEFINE_uint64(ode_order,           20, "ode order");
-DEFINE_uint64(ode_grid,            16, "ode grid");
-DEFINE_uint64(ode_timeout,          0, "ode timeout");
-DEFINE_bool  (ode_cache,        false, "ode cache");
-DEFINE_bool  (ode_forward_only, false, "ode forward only");
-DEFINE_bool  (ode_parallel,     false, "ode parallel");
-DEFINE_bool  (proof,            false, "proof");
-DEFINE_bool  (readable_proof,   false, "readable proof");
-DEFINE_bool  (theory_propagation, false, "use theory propagation / deduction");
-DEFINE_bool  (model,            false, "model");
-DEFINE_bool  (visualize,        false, "visualize");
-DEFINE_bool  (verbose,          false, "verbose");
-DEFINE_bool  (debug,            false, "debug mode");
-DEFINE_bool  (stat,             false, "show stat");
-DEFINE_uint64(aggressive,           0, "number of samples to use for aggressive sampling");
-DEFINE_uint64(sample,               0, "number of samples to use for sound sampling");
-DEFINE_uint64(multiple_soln,        1, "maximum number of solutions to find");
-DEFINE_bool  (polytope,         false, "use polytope contractor in IBEX");
+using std::string;
+using std::endl;
+using std::cerr;
+using std::cout;
+using std::ofstream;
+using std::ostream;
 
 void
 SMTConfig::initializeConfig( )
@@ -62,7 +43,7 @@ SMTConfig::initializeConfig( )
   // Set Global Default configuration
   logic                        = UNDEF;
   status                       = l_Undef;
-  incremental                  = 0;
+  incremental                  = 1;
   produce_stats                = 1;
   produce_models               = 0;
   produce_proofs               = 0;
@@ -82,7 +63,7 @@ SMTConfig::initializeConfig( )
   sat_use_luby_restart         = 0;
   sat_learn_up_to_size         = 0;
   sat_temporary_learn          = 1;
-  sat_preprocess_booleans      = 1;
+  sat_preprocess_booleans      = 0;
   sat_preprocess_theory        = 0;
   sat_centrality               = 18;
   sat_trade_off                = 8192;
@@ -118,10 +99,9 @@ SMTConfig::initializeConfig( )
   proof_certify_inter          = 0;
   // NRA-Solver Default configuration
   nra_precision                = 0.0;
-  nra_icp_improve              = 10.0;
   nra_verbose                  = false;
   nra_debug                    = false;
-  nra_stat                     = false;
+  nra_use_stat                 = false;
   nra_proof                    = false;
   nra_readable_proof           = false;
   nra_model                    = false;
@@ -143,7 +123,11 @@ SMTConfig::initializeConfig( )
   nra_multiple_soln            = 1;
   nra_found_soln               = 0;
   nra_polytope                 = false;
+  nra_simp                     = true;
+  nra_ncbt                     = false;
+  nra_worklist_fp              = false;
   nra_output_num_nodes         = false;
+  initLogging();
 }
 
 void SMTConfig::parseConfig ( char * f )
@@ -362,131 +346,283 @@ void SMTConfig::printConfig ( ostream & out )
   out << "lra_check_on_assert "      << lra_check_on_assert << endl;
 }
 
-void
-SMTConfig::parseCMDLine( int /* argc */
-                       , char * /* argv */ [] )
-{
-  nra_precision           = FLAGS_precision;
-  nra_delta_test          = FLAGS_delta;
-  nra_use_delta_heuristic = FLAGS_delta_heuristic;
-  nra_short_sat           = FLAGS_short_sat;
-  nra_plan_heuristic      = FLAGS_plan_heuristic;
-  nra_plan_domain         = FLAGS_plan_domain;
-  nra_plan_problem        = FLAGS_plan_problem;
-  nra_output_num_nodes    = FLAGS_output_num_nodes;
-  nra_bmc_heuristic       = FLAGS_bmc_heuristic;
-  nra_ODE_step            = FLAGS_ode_step;
-  nra_ODE_taylor_order    = FLAGS_ode_order;
-  nra_ODE_grid_size       = FLAGS_ode_grid;
-  nra_ODE_timeout         = FLAGS_ode_timeout;
-  nra_ODE_cache           = FLAGS_ode_cache;
-  nra_ODE_forward_only    = FLAGS_ode_forward_only;
-  nra_ODE_parallel        = FLAGS_ode_parallel;
-  nra_readable_proof      = FLAGS_readable_proof;
-  sat_theory_propagation  = FLAGS_theory_propagation;
-  nra_proof               = nra_readable_proof || FLAGS_proof;
-  nra_model               = FLAGS_model;
-  nra_json                = FLAGS_visualize;
-  nra_verbose             = FLAGS_verbose || FLAGS_debug;
-  nra_debug               = FLAGS_debug;
-  nra_stat                = FLAGS_stat;
-  nra_aggressive          = FLAGS_aggressive;
-  nra_sample              = FLAGS_sample;
-  nra_multiple_soln       = FLAGS_multiple_soln;
-  nra_polytope            = FLAGS_polytope;
-
-  if (nra_proof) {
-      /* Open file stream */
-      nra_proof_out_name = string(filename) + ".proof";
-      nra_proof_out.open (nra_proof_out_name.c_str(), std::ofstream::out | std::ofstream::trunc);
-      if(nra_proof_out.fail()) {
-          cout << "Cannot create a file: " << nra_proof_out_name << endl;
-          exit( 1 );
-      }
-  }
-  if (nra_model) {
-      nra_model_out_name = string(filename) + ".model";
-  }
-  if (nra_json) {
-      nra_json_out_name = string(filename) + ".json";
-      /* Open file stream */
-      nra_json_out.open (nra_json_out_name.c_str(), std::ofstream::out | std::ofstream::trunc );
-      if(nra_json_out.fail()) {
-          cout << "Cannot create a file: " << filename << endl;
-          exit( 1 );
-      }
-  }
-  if (nra_verbose || nra_debug) {
-      verbosity = 10;
-  }
-  FLAGS_log_prefix = 0;
-  FLAGS_logtostderr = 1;
-  if (nra_debug) { FLAGS_v = 4; }
-  else if (nra_verbose) { FLAGS_v = 3; }
-  else { FLAGS_v = 0; }
+void printUsage(ez::ezOptionParser & opt) {
+    string usage;
+    opt.getUsage(usage, 160);
+    std::cout << usage;
+    exit(1);
 }
 
-void SMTConfig::printHelp( )
-{
-  const char help_string[]
-      =
-      "Usage: ./solver [OPTION] filename\n"
-      "where OPTION can be\n"
-      "  --help [-h]              print this help\n"
-      "  --config=<filename>      use configuration file <filename>\n"
-      "\n"
-      "  --precision=<double>     set precision (default 0.001)\n"
-      "                           this overrides the value specified in input files\n"
-      "\n"
-      "  --delta                  interpret precision as delta instead of epsilon (default)\n"
-      "\n"
-      "  --delta-heuristic        use residual delta to select variables to split\n"
-      "\n"
-      "  --short-sat              short cut SAT solver assignments if SAT\n"
-      "\n"
-      "  --proof                  the solver produces an addition file \"filename.proof\"\n"
-      "                           upon termination, and provides the following information:\n"
-      "                             1. If the answer is delta-sat, then filename.proof contains\n"
-      "                                a witnessing solution, plugged into a δ-perturbation of\n"
-      "                                the original formula, such that the correctness can be\n"
-      "                                easily checked externally.\n"
-      "                             2. If the answer is unsat, then filename.proof contains a\n"
-      "                                trace of the solving steps, which can be verified as a\n"
-      "                                proof tree that establishes the unsatisfiability of the\n"
-      "                                formula. This file can be the input of a stand-alone proof\n"
-      "                                checker.\n"
-      "\n"
-      "   --verbose               the solver will output the detailed decision traces along with\n"
-      "                           the solving process. That is, it will print the branch-and-prune\n"
-      "                           trace in the constraint propagation procedures for checking\n"
-      "                           consistency of theory atoms, as well as DPLL-level\n"
-      "                           assert/check/backtracking operations.\n"
-#ifdef SUPPORT_ODE
-      "\n"
-      "   --ode-order             specify the maximum order that will be used in Taylor method ODE solving\n"
-      "                           (Default: 20)\n"
-      "\n"
-      "   --ode-grid              specify the number of grids that we use in ODE solving\n"
-      "                           (Default: 16)\n"
-      "\n"
-      "   --ode-timeout           specify the timeout (msec) to be used in single ODE solving step\n"
-      "                           (Default: +oo)\n"
-      "\n"
-      "   --ode-cache             enable reusing ODE computation by caching them\n"
-      "                           (Default: false)\n"
-      "\n"
-      "   --ode-forward-only      use forward ODE pruning and do not use backward pruning\n"
-      "                           (Default: false, use both of them)\n"
-      "\n"
-      "   --ode-parallel          specify to solve ODEs in parallel\n"
-      "                           (Default: false)\n"
-      "\n"
-      "   --ode-step              specify the step size (positive float) in ODE solving\n"
-      "                           (Default: automatically decided by CAPD)\n"
-      "\n"
-      "   --visualize             print out data for the visualization of ODE solving\n"
-      "                           which will be saved to \"filename.json\".\n"
+void
+SMTConfig::parseCMDLine( int argc
+                         , const char * argv [] ) {
+    // For more information, Read
+    // https://github.com/dreal-deps/ezoptionparser/blob/master/examples/complete.cpp
+    ez::ezOptionParser opt;
+    opt.add("", false, 0, 0,
+            "Display usage instructions.",
+            "-h", "-help", "--help", "--usage");
+    opt.add("", false, 0, 0,
+            "print out version information.",
+            "--version");
+    opt.add("", false, 1, 0,
+            "set precision (default 0.001)\n"
+            "this overrides the value specified in input files",
+            "--precision");
+    opt.add("", false, 0, 0,
+            "interpret precision as delta instead of epsilon",
+            "--delta");
+    opt.add("", false, 0, 0,
+            "use residual delta to select variables to split",
+            "--delta-heuristic", "--delta_heuristic");
+    opt.add("" , false, 1, 0,
+            "BMC heuristic",
+            "--bmc-heuristic", "--bmc_heuristic");
+    opt.add("", false, 0, 0,
+            "short cut SAT solver assignments if SAT",
+            "--short-sat", "--short_sat");
+    opt.add("", false, 1, 0,
+            "manually specify the step size (positive double) in ODE solving (default: automatic control)",
+            "--ode-step", "--ode_step");
+    opt.add("", false, 1, 0,
+            "specify the maximum order that will be used in Taylor method ODE solving (Default: 20)",
+            "--ode-order", "--ode_order");
+    opt.add("", false, 1, 0,
+            "specify the number of grids that we use in ODE solving (default: 16)",
+            "--ode-grid", "--ode_grid");
+    opt.add("", false, 1, 0,
+            "specify the timeout (msec) to be used in single ODE solving step (default: +oo)",
+            "--ode-timeout", "--ode_timeout");
+    opt.add("", false, 0, 0,
+            "enable reusing ODE computation by caching them",
+            "--ode-cache", "--ode_cache");
+    opt.add("", false, 0, 0,
+            "use only forward ODE pruning and do not use backward pruning",
+            "--ode-forward-only", "--ode_forward_only");
+    opt.add("", false, 0, 0,
+            "specify to solve ODEs in parallel",
+            "--ode-parallel", "--ode_parallel");
+    opt.add("", false, 0, 0,
+            "produce an addition file \"filename.proof\" which contains a proof for UNSAT",
+            "--proof");
+    opt.add("", false, 0, 0,
+            "generate human-readable proof",
+            "--readable-proof", "--readable_proof");
+    opt.add("", false, 0, 0,
+            "use theory propagation",
+            "--theory-propagation", "--theory_propagation");
+    opt.add("", false, 0, 0,
+            "output delta-sat model if found",
+            "--model");
+    opt.add("", false, 0, 0,
+            "output visualization file (.json)",
+            "--visualize", "--vis");
+#ifdef LOGGING
+    opt.add("", false, 0, 0,
+            "output debugging messages",
+            "--debug");
+    opt.add("", false, 0, 0,
+            "output info messages",
+            "--verbose");
 #endif
-      ;
-  cerr << help_string;
+    opt.add("", false, 0, 0,
+            "output solving stats",
+            "--stat");
+    opt.add("", false, 1, 0,
+            "number of samples to use for aggressive sampling",
+            "--aggressive");
+    opt.add("", false, 1, 0,
+            "number of samples to use for sound sampling",
+            "--sample");
+    opt.add("", false, 1, 0,
+            "maximum number of solutions to find",
+            "--multiple-soln", "--multiple_soln", "--multiple-solution");
+    opt.add("", false, 0, 0,
+            "use polytope contractor in IBEX",
+            "--polytope");
+    opt.add("", false, 0, 0,
+            "use simplification in preprocessing",
+            "--simp");
+    opt.add("", false, 0, 0,
+            "do not use simplification in preprocessing",
+            "--no-simp");
+    opt.add("", false, 0, 0,
+            "use non-chronological backtracking in ICP loop",
+            "--ncbt");
+    opt.add("", false, 0, 0,
+            "use worklist fixpoint algorithm",
+            "--worklist-fp");
+    opt.add("", false, 0, 0,
+            "read formula from standard input",
+            "--in");
+
+    opt.parse(argc, argv);
+    opt.overview  = "dReal ";
+    opt.overview += "v" + string(PACKAGE_VERSION);
+    opt.overview += " (commit " + string(dreal::getGitSHA1()).substr(0, 12) + ")";
+
+    if (opt.isSet("--version")) {
+        // Usage Information
+        std::cout << opt.overview << endl;
+        exit(0);
+    }
+
+    // Usage Information
+    opt.overview += " : delta-complete SMT solver";
+    opt.syntax    = "dReal [OPTIONS] <input file>";
+
+    if (opt.isSet("-h")) {
+        printUsage(opt);
+    }
+
+    // Extract Boolean Args
+    nra_delta_test          = opt.isSet("--delta");
+    nra_use_delta_heuristic = opt.isSet("--delta-heuristic");
+    nra_short_sat           = opt.isSet("--short-sat");
+    nra_ODE_cache           = opt.isSet("--ode-cache");
+    nra_ODE_forward_only    = opt.isSet("--ode-forward-only");
+    nra_ODE_parallel        = opt.isSet("--ode-parallel");
+    nra_readable_proof      = opt.isSet("--readable-proof");
+    sat_theory_propagation  = opt.isSet("--theory-propagation");
+    nra_proof               = nra_readable_proof || opt.isSet("--proof");
+    nra_model               = opt.isSet("--model");
+    if (nra_model) { produce_models = true; }
+    nra_json                = opt.isSet("--visualize");
+#ifdef LOGGING
+    nra_verbose             = opt.isSet("--verbose") || opt.isSet("--debug");
+    nra_debug               = opt.isSet("--debug");
+#endif
+    nra_use_stat            = opt.isSet("--stat");
+    nra_polytope            = opt.isSet("--polytope");
+    nra_simp                = !opt.isSet("--no-simp");
+    nra_ncbt                = opt.isSet("--ncbt");
+    nra_worklist_fp         = opt.isSet("--worklist-fp");
+
+    // Extract Double Args
+    if (opt.isSet("--precision")) { opt.get("--precision")->getDouble(nra_precision); }
+    if (opt.isSet("--ode-step")) { opt.get("--ode-step")->getDouble(nra_ODE_step); }
+
+    // Extract String Args
+    if (opt.isSet("--bmc-heuristic")) { opt.get("--bmc-heuristic")->getString(nra_bmc_heuristic); }
+
+    // Extract ULong Args
+    if (opt.isSet("--ode-order")) { opt.get("--ode-order")->getULong(nra_ODE_taylor_order); }
+    if (opt.isSet("--ode-grid")) { opt.get("--ode-grid")->getULong(nra_ODE_grid_size); }
+    if (opt.isSet("--ode-timeout")) { opt.get("--ode-timeout")->getULong(nra_ODE_timeout); }
+    if (opt.isSet("--aggressive")) { opt.get("--aggressive")->getULong(nra_aggressive); }
+    if (opt.isSet("--sample")) { opt.get("--sample")->getULong(nra_sample); }
+    if (opt.isSet("--multiple")) { opt.get("--multiple-soln")->getULong(nra_multiple_soln); }
+
+    std::vector<std::string> badOptions;
+    if(!opt.gotRequired(badOptions)) {
+        for (size_t i = 0; i < badOptions.size(); ++i)
+            std::cerr << "ERROR: Missing required option " << badOptions[i] << ".\n\n";
+        printUsage(opt);
+    }
+
+    if(!opt.gotExpected(badOptions)) {
+        for (size_t i = 0; i < badOptions.size(); ++i)
+            std::cerr << "ERROR: Got unexpected number of arguments for option " << badOptions[i] << ".\n\n";
+        printUsage(opt);
+    }
+
+    // Set up filename
+    filename = "";
+    bool stdin_is_on = opt.isSet("--in");
+    std::vector<std::string*> args;
+    copy(opt.firstArgs.begin() + 1, opt.firstArgs.end(),   back_inserter(args));
+    copy(opt.unknownArgs.begin(),   opt.unknownArgs.end(), back_inserter(args));
+    copy(opt.lastArgs.begin(),      opt.lastArgs.end(),    back_inserter(args));
+
+    if (stdin_is_on && args.size() > 0) {
+        printUsage(opt);
+    }
+
+    if (!stdin_is_on && args.size() == 0) {
+        printUsage(opt);
+    }
+
+    if (args.size() > 1) {
+        printUsage(opt);
+    }
+
+    assert((args.size() == 1 && !stdin_is_on) ||
+           (args.size() == 0 && stdin_is_on));
+
+    if (args.size() == 1) {
+        filename = *args[0];
+        if (filename.length() > 0) {
+            struct stat s;
+            if(stat(filename.c_str(),&s) != 0 || !(s.st_mode & S_IFREG)) {
+                opensmt_error2( "can't open file:", filename );
+            }
+        }
+    } else {
+        filename = "output";
+    }
+
+    // --proof
+    if (nra_proof) {
+        /* Open file stream */
+        nra_proof_out_name = filename + ".proof";
+        nra_proof_out.open (nra_proof_out_name.c_str(), std::ofstream::out | std::ofstream::trunc);
+        if(nra_proof_out.fail()) {
+            cout << "Cannot create a file: " << nra_proof_out_name << endl;
+            exit( 1 );
+        }
+    }
+
+    // --model
+    if (nra_model) {
+        nra_model_out_name = filename + ".model";
+    }
+
+    // --visualize
+    if (nra_json) {
+        nra_json_out_name = filename + ".json";
+        /* Open file stream */
+        nra_json_out.open (nra_json_out_name.c_str(), std::ofstream::out | std::ofstream::trunc );
+        if(nra_json_out.fail()) {
+            cout << "Cannot create a file: " << filename << endl;
+            exit( 1 );
+        }
+    }
+
+#ifdef LOGGING
+    // --verbose, --debug
+    if (nra_verbose || nra_debug) {
+        verbosity = 10;
+    }
+
+    // logging
+    initLogging();
+    if (nra_debug) {
+        setVerbosityDebugLevel();
+    } else if (nra_verbose) {
+        setVerbosityInfoLevel();
+    } else {
+        setVerbosityErrorLevel();
+    }
+    #endif
+}
+
+void SMTConfig::initLogging() {
+    static bool already_init = false;
+    if (!already_init) {
+        el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Format, "%msg");
+        el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToFile, "false");
+        already_init = true;
+    }
+}
+
+void SMTConfig::setVerbosityDebugLevel() {
+    el::Loggers::setVerboseLevel(DREAL_DEBUG_LEVEL);
+}
+
+void SMTConfig::setVerbosityInfoLevel() {
+    el::Loggers::setVerboseLevel(DREAL_INFO_LEVEL);
+}
+
+void SMTConfig::setVerbosityErrorLevel() {
+    el::Loggers::setVerboseLevel(DREAL_ERROR_LEVEL);
 }

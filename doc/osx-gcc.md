@@ -15,7 +15,8 @@ gcc-4.8/automake/autoconf/libtool/git/cmake
 -------------------------------------------
 
     brew update
-    brew install gcc automake autoconf libtool git cmake
+    brew install gcc automake autoconf libtool git cmake pkg-config
+
 
 Build dReal
 ===========
@@ -46,7 +47,7 @@ ocaml/opam
 
     brew install ocaml opam
     opam init
-    eval `opam config env --root=<ABSOLUTE_HOMEPATH>/ocamlbrew/ocaml-4.00.1/.opam`
+    eval `opam config env`
     opam update
     opam install ocamlfind batteries oasis
 

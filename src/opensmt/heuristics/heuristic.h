@@ -38,9 +38,10 @@ namespace dreal {
     virtual void inform(Enode * e);
     virtual void backtrack();
     virtual Lit getSuggestion();
-
+    virtual Clause* getConflict();
+    
   protected:
-    virtual void getSuggestions();
+    virtual bool getSuggestions();
     virtual void pushTrailOnStack();
 
     bool isStackConsistentWithSuggestion();
@@ -59,5 +60,6 @@ namespace dreal {
     int m_depth;
     Egraph * m_egraph;
     set<Enode*> stack_literals;
+    SMTConfig *m_config;
   };
 }

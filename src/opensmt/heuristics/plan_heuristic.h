@@ -45,11 +45,11 @@ public:
 
     void resetSuggestions() { m_suggestions.clear(); }
     bool is_initialized() { return m_is_initialized; }
-    void getSuggestions();
+    bool getSuggestions();
     void inform(Enode * e);
     void backtrack();
     void assertLits();
-
+    Clause* getConflict() {return NULL;}
 
 
 private:

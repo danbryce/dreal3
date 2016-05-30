@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 project(DREAL C CXX)
 set(DREAL_VERSION_MAJOR 3)
 set(DREAL_VERSION_MINOR 15)
-set(DREAL_VERSION_PATCH 05)
+set(DREAL_VERSION_PATCH 08.02)
 set(PACKAGE_NAME dReal)
 set(PACKAGE_VERSION "${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}")
 set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
@@ -12,8 +12,9 @@ set(BUG_REPORT_URL "${PACKAGE_BUGREPORT}" CACHE STRING "Default URL where bug re
 set(CMAKE_COLOR_MAKEFILE ON)
 enable_testing()
 
-option(SUPPORT_ODE "Support ODE" ON)
-option(BUILD_STATIC_BIN  "Build static binary" OFF)
+option(SUPPORT_ODE      "Support ODE" ON)
+option(LOGGING          "Enable Logging" ON)
+option(BUILD_STATIC_BIN "Build static binary"  OFF)
 option(BUILD_SHARED_LIB "Build shared library" OFF)
 
 # Added for CTest
@@ -92,15 +93,16 @@ endif()
 if(BUILD_STATIC_BIN AND BUILD_SHARED_LIB)
   message(FATAL_ERROR "Can't handle both of BUILD_STATIC_BIN and BUILD_SHARED_LIB options." )
 endif()
-if(APPLE AND (${BUILD_SHARED_LIB} MATCHES "ON"))
-  message(STATUS "On Mac OS X, we do not support shared library generation yet.")
-  set(BUILD_SHARED_LIB "OFF")
+if(APPLE AND BUILD_SHARED_LIB)
+  message(STATUS "OSX + BUILD_SHARED_LIB: Run target 'shared_lib' to generate lib/libdreal.dylib")
 endif()
-if(BUILD_SHARED_LIB)
+if((NOT APPLE) AND BUILD_SHARED_LIB)
   set(SHARED_LIB_CONFIG_COMMAND "--enable-shared")
   set(SHARED_LIB_IBEX_COMMAND   "--enable-shared")
   set(SHARED_LIB_CMAKE_COMMAND  "-DBUILD_SHARED_LIBS=ON")
 else()
+  # In case of APPLE, we still only generate static libraries (.a). We
+  # will later convert them to a single dylib file.
   set(SHARED_LIB_CONFIG_COMMAND "--disable-shared")
   set(SHARED_LIB_IBEX_COMMAND   "")
   set(SHARED_LIB_CMAKE_COMMAND  "-DBUILD_SHARED_LIBS=OFF")
@@ -126,7 +128,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.8 or greater.")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-mismatched-tags -Qunused-arguments")
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     # In OSX, clang requires "-stdlib=libc++" to support C++11
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
@@ -172,6 +173,13 @@ find_package(GIT REQUIRED)
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 
+# FindPythonLibs
+set(Python_ADDITIONAL_VERSIONS 2.7)
+find_package(PythonLibs 2.7)
+if(PYTHONLIBS_FOUND)
+  include_directories("${PYTHON_INCLUDE_DIR}")
+endif()
+
 function(JOIN VALUES GLUE OUTPUT)
   string (REGEX REPLACE "([^\\]|^);" "\\1${GLUE}" _TMP_STR "${VALUES}")
   string (REGEX REPLACE "[\\](.)" "\\1" _TMP_STR "${_TMP_STR}") #fixes escaping
@@ -187,14 +195,29 @@ JOIN("${DREAL_EXTRA_LINKER_FLAGS}" "," EXTERNAL_LD_FLAGS)
 ExternalProject_Add(FILIB
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   GIT_REPOSITORY https://github.com/dreal-deps/filibxx.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
   CONFIGURE_COMMAND autoreconf --install > /dev/null 2>&1 || autoreconf && ./configure CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} "CXXFLAGS=${EXTERNAL_CXX_FLAGS} -w" "LDFLAGS=${EXTERNAL_LD_FLAGS}" --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND}
   BUILD_COMMAND make -j
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND make -j install
-)
+  INSTALL_COMMAND make -j install)
 set(EXTRA_LIBS "prim" ${EXTRA_LIBS})
+
+################################################################
+# External: NLOPT
+################################################################
+ExternalProject_Add(NLOPT
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/dreal-deps/nlopt.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND autoreconf --install > /dev/null 2>&1 || autoreconf && ./configure CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} "CXXFLAGS=${EXTERNAL_CXX_FLAGS} -w" "LDFLAGS=${EXTERNAL_LD_FLAGS}" --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --without-guile --without-python --without-octave --without-matlab
+  BUILD_COMMAND make -j
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND make -j install)
+set(EXTRA_LIBS "nlopt" ${EXTRA_LIBS})
 
 if(SUPPORT_ODE)
   ################################################################
@@ -205,13 +228,13 @@ if(SUPPORT_ODE)
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     GIT_REPOSITORY https://github.com/soonhokong/capd4.git
     #dreal-deps/capdDynSys-4.0.git
-    GIT_TAG origin/master
-    UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+    GIT_TAG master
+    UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+           COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
     CONFIGURE_COMMAND autoreconf --install > /dev/null 2>&1 || autoreconf && ./configure CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} "CXXFLAGS=${EXTERNAL_CXX_FLAGS} -w" "LDFLAGS=${EXTERNAL_LD_FLAGS}" --prefix=${CMAKE_CURRENT_BINARY_DIR} --without-gui --without-boost --with-mpfr=no --with-filib=no ${SHARED_LIB_CONFIG_COMMAND}
     BUILD_COMMAND make -j
     BUILD_IN_SOURCE 1
-    INSTALL_COMMAND make -j install
-    )
+    INSTALL_COMMAND make -j install)
 
   ################################################################
   # External: CAPD-DynSys-3.0
@@ -219,8 +242,9 @@ if(SUPPORT_ODE)
   # ExternalProject_Add(CAPD3
   #   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   #   GIT_REPOSITORY https://github.com/soonhokong/capdDynSys-3.0.git
-  #   GIT_TAG origin/master
-  #   UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  #   GIT_TAG master
+  #   UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+  #          COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
   #   CONFIGURE_COMMAND autoreconf --install > /dev/null 2>&1 || autoreconf && ./configure CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} "CXXFLAGS=${EXTERNAL_CXX_FLAGS} -w" "LDFLAGS=${EXTERNAL_LD_FLAGS}" --prefix=${CMAKE_CURRENT_BINARY_DIR} --without-gui --with-filib=no --with-mpfr=no
   #   BUILD_COMMAND make -j
   #   BUILD_IN_SOURCE 1
@@ -232,16 +256,29 @@ endif()
 ################################################################
 # External: CLP
 ################################################################
-ExternalProject_Add(CLP
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-  GIT_REPOSITORY https://github.com/dreal-deps/clp-1.16.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
-  CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --enable-static --with-blas=BUILD --with-lapack=BUILD --disable-bzlib --disable-zlib
-  BUILD_COMMAND make -j
-  BUILD_IN_SOURCE 1
-  INSTALL_COMMAND make install
-)
+if(MINGW)
+  ExternalProject_Add(CLP
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+    GIT_REPOSITORY https://github.com/dreal-deps/clp-1.16.git
+    GIT_TAG master
+    UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+           COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+    CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./configure --build=x86_64-w64-mingw32 --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --enable-static --with-blas=BUILD --with-lapack=BUILD --disable-bzlib --disable-zlib
+    BUILD_COMMAND make -j
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND make install)
+else(MINGW)
+  ExternalProject_Add(CLP
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+    GIT_REPOSITORY https://github.com/dreal-deps/clp-1.16.git
+    GIT_TAG master
+    UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+           COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+    CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --enable-static --with-blas=BUILD --with-lapack=BUILD --disable-bzlib --disable-zlib
+    BUILD_COMMAND make -j
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND make install)
+endif()
 set(EXTRA_LIBS "ClpSolver" "Clp" "CoinUtils" "m" ${EXTRA_LIBS})
 
 ################################################################
@@ -255,70 +292,70 @@ ExternalProject_Add(IBEX
   DEPENDS CLP FILIB
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   GIT_REPOSITORY https://github.com/dreal-deps/ibex-lib.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
-  CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./waf configure --prefix=${CMAKE_CURRENT_BINARY_DIR} --with-clp=${CMAKE_CURRENT_BINARY_DIR} --with-filib=${CMAKE_CURRENT_BINARY_DIR} ${IBEX_DEBUG_MODE} ${SHARED_LIB_IBEX_COMMAND}
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} ./waf configure --with-c++11 --prefix=${CMAKE_CURRENT_BINARY_DIR} --with-clp=${CMAKE_CURRENT_BINARY_DIR} --with-filib=${CMAKE_CURRENT_BINARY_DIR} ${IBEX_DEBUG_MODE} ${SHARED_LIB_IBEX_COMMAND}
   BUILD_COMMAND ./waf build
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND ./waf install
-)
+  INSTALL_COMMAND ./waf install)
 set(EXTRA_LIBS "ibex" ${EXTRA_LIBS})
 
-# Libunwind
-find_package(Libunwind)
-if(LIBUNWIND_FOUND)
-  message(STATUS "libunwind found")
-  message(STATUS "lib: ${LIBUNWIND_LIBRARY}")
-  include_directories(${LIBUNWIND_INCLUDE_DIR})
-  set(EXTRA_LIBS ${LIBUNWIND_LIBRARY} ${EXTRA_LIBS})
-else()
-  message(STATUS "libunwind not found")
-endif()
+################################################################
+# External: Catch (testing framework)
+################################################################
+ExternalProject_Add(CATCH
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+  GIT_REPOSITORY https://github.com/dreal-deps/Catch.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND echo "nothing to configure"
+  BUILD_COMMAND echo "nothing to build"
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/catch && cp -v single_include/catch.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/catch/)
 
 ################################################################
-# External: gflags (Google Flags)
+# External: PEGTL (parsing)
 ################################################################
-ExternalProject_Add(GFLAGS
+ExternalProject_Add(PEGTL
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-  GIT_REPOSITORY https://github.com/dreal-deps/gflags.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
-  CONFIGURE_COMMAND cmake -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} "-DCMAKE_CXX_FLAGS=${EXTERNAL_CXX_FLAGS} -fPIC -DNDEBUG -w" ${SHARED_LIB_CMAKE_COMMAND} -DBUILD_STATIC_LIBS=ON -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR} ./
-  BUILD_COMMAND make -j
+  GIT_REPOSITORY https://github.com/dreal-deps/PEGTL.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND echo "nothing to configure"
+  BUILD_COMMAND echo "nothing to build"
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND make install
-)
-set(EXTRA_LIBS "gflags" ${EXTRA_LIBS})
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include && cp -r -v pegtl.hh pegtl ${CMAKE_CURRENT_BINARY_DIR}/include/)
 
 ################################################################
-# External: glog (Google Log)
+# External: Easylogging++
 ################################################################
-ExternalProject_Add(GLOG
-  DEPENDS GFLAGS
+ExternalProject_Add(EASYLOGGINGPP
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-  GIT_REPOSITORY https://github.com/dreal-deps/glog.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
-  CONFIGURE_COMMAND autoreconf --install > /dev/null 2>&1 || autoreconf && ./configure CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} "CXX_FLAGS=-DNDEBUG ${EXTERNAL_CXX_FLAGS}" CFLAGS=-DNDEBUG "LDFLAGS=${EXTERNAL_LD_FLAGS}" --prefix=${CMAKE_CURRENT_BINARY_DIR} ${SHARED_LIB_CONFIG_COMMAND} --with-gflags=${CMAKE_CURRENT_BINARY_DIR}
-  BUILD_COMMAND make -j
+  GIT_REPOSITORY https://github.com/dreal-deps/easyloggingpp.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND echo "nothing to configure"
+  BUILD_COMMAND echo "nothing to build"
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND make install
-)
-set(EXTRA_LIBS "glog" ${EXTRA_LIBS})
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp && cp -v src/easylogging++.h ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp/)
 
 ################################################################
-# External: googletest (Google Test)
+# External: ezoptionparser
 ################################################################
-ExternalProject_Add(GTEST
+ExternalProject_Add(EZOPTIONPARSER
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-  GIT_REPOSITORY https://github.com/dreal-deps/googletest.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
-  CONFIGURE_COMMAND cmake -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} "-DCMAKE_CXX_FLAGS=${EXTERNAL_CXX_FLAGS} -w" -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR} ./
-  BUILD_COMMAND make -j
+  GIT_REPOSITORY https://github.com/dreal-deps/ezoptionparser.git
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
+  CONFIGURE_COMMAND echo "nothing to configure"
+  BUILD_COMMAND echo "nothing to build"
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND make install
-)
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/ezOptionParser/ && make PREFIX=${CMAKE_CURRENT_BINARY_DIR} install)
 
 ################################################################
 # External: json
@@ -326,13 +363,13 @@ ExternalProject_Add(GTEST
 ExternalProject_Add(JSON
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   GIT_REPOSITORY https://github.com/dreal-deps/json.git
-  GIT_TAG origin/master
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull -s recursive -X theirs origin master
+  GIT_TAG master
+  UPDATE_COMMAND ${GIT_EXECUTABLE} fetch --all
+         COMMAND ${GIT_EXECUTABLE} reset --hard origin/master
   CONFIGURE_COMMAND echo "nothing to configure"
-  BUILD_COMMAND CXX=${CMAKE_CXX_COMPILER} make -j
+  BUILD_COMMAND echo "nothing to build"
   BUILD_IN_SOURCE 1
-  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/json && cp -v src/json.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/json/
-)
+  INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/json && cp -v src/json.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/json/)
 
 ################################################################
 # Threads
@@ -402,25 +439,37 @@ ADD_CUSTOM_COMMAND(
 SET_SOURCE_FILES_PROPERTIES(${DREAL_BINARY_DIR}/opensmt/parsers/smt2/smt2parser.cc GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${DREAL_BINARY_DIR}/opensmt/parsers/smt2/smt2lexer.cc GENERATED)
 ################################################################
+add_subdirectory(icp)
 add_subdirectory(dsolvers)
 add_subdirectory(util)
+add_subdirectory(constraint)
 add_subdirectory(contractor)
+add_subdirectory(tools/dop)
 
-if(BUILD_SHARED_LIB)
+SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${DREAL_BINARY_DIR}/lib")
+SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${DREAL_BINARY_DIR}/lib")
+if((NOT APPLE) AND BUILD_SHARED_LIB)
   add_library(dreal SHARED ${DREAL_SRCS})
-  if(APPLE)
-    target_link_libraries(dreal ${EXTRA_LIBS})
-  endif()
+  add_library(dop SHARED ${DOP_SRCS})
 else()
   add_library(dreal ${DREAL_SRCS})
+  add_library(dop ${DOP_SRCS})
 endif()
 
+add_dependencies(dop PEGTL)
+add_dependencies(dop IBEX)
+add_dependencies(dop NLOPT)
+add_dependencies(dop EASYLOGGINGPP)
+add_dependencies(dop EZOPTIONPARSER)
+add_dependencies(dop JSON)
 add_dependencies(dreal IBEX)
-add_dependencies(dreal GLOG)
-add_dependencies(dreal GFLAGS)
+add_dependencies(dreal NLOPT)
+add_dependencies(dreal EASYLOGGINGPP)
+add_dependencies(dreal EZOPTIONPARSER)
 add_dependencies(dreal JSON)
 if(SUPPORT_ODE)
   add_dependencies(dreal CAPD4)
+  add_dependencies(dop CAPD4)
 endif()
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DREAL_EXTRA_LINKER_FLAGS} ${EXTERNAL_LD_FLAGS}")
@@ -431,38 +480,62 @@ SET_TARGET_PROPERTIES(dReal-bin
   PROPERTIES OUTPUT_NAME dReal)
 target_link_libraries(dReal-bin dreal ${EXTRA_LIBS})
 
+if(NOT BUILD_STATIC_BIN)
+  add_executable(dOp-bin tools/dop/main.cpp)
+  SET_TARGET_PROPERTIES(dOp-bin
+    PROPERTIES OUTPUT_NAME dOp)
+  target_link_libraries(dOp-bin dop dreal ${PYTHON_LIBRARIES} ${EXTRA_LIBS})
+endif()
+
 #add tests
 add_subdirectory(tests/util)
 add_subdirectory(tests/nra)
 add_subdirectory(tests/c_api)
+add_subdirectory(tests/ibex)
+add_subdirectory(tests/nlopt)
+add_subdirectory(tests/contractor)
 if(SUPPORT_ODE)
   add_subdirectory(tests/capd4)
   add_subdirectory(tests/nra_ode)
+  add_subdirectory(tests/drh)
 endif()
 
 # Include style check
 include(StyleCheck)
 file(GLOB_RECURSE DREAL_SOURCES
   ${DREAL_SOURCE_DIR}/contractor/*.cpp ${DREAL_SOURCE_DIR}/contractor/*.h
+  ${DREAL_SOURCE_DIR}/constraint/*.cpp ${DREAL_SOURCE_DIR}/constraint/*.h
   ${DREAL_SOURCE_DIR}/util/*.cpp       ${DREAL_SOURCE_DIR}/util/*.h
+  ${DREAL_SOURCE_DIR}/icp/*.cpp        ${DREAL_SOURCE_DIR}/icp/*.h
   ${DREAL_SOURCE_DIR}/dsolvers/*.cpp   ${DREAL_SOURCE_DIR}/dsolvers/*.h
   ${DREAL_SOURCE_DIR}/tests/*.cpp      ${DREAL_SOURCE_DIR}/tests/*.h
-  )
+  ${DREAL_SOURCE_DIR}/tools/dop/*.cpp  ${DREAL_SOURCE_DIR}/tools/dop/*.h)
 add_style_check_target(style "${DREAL_SOURCES}")
-add_test(NAME style_check COMMAND ${DREAL_SOURCE_DIR}/cmake/Modules/cpplint.py "--filter=-readability/casting,-whitespace/line_length,-build/header_guard,-whitespace/indent,-runtime/references,-build/c++11" ${DREAL_SOURCES})
+add_test(NAME style_check COMMAND ${DREAL_SOURCE_DIR}/cmake/Modules/cpplint.py "--filter=-readability/casting,-whitespace/line_length,-build/header_guard,-whitespace/indent,-runtime/references,-build/c++11,-runtime/int" ${DREAL_SOURCES})
 
 ADD_CUSTOM_COMMAND(TARGET dReal-bin
           POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E make_directory ${DREAL_SOURCE_DIR}/../bin
           COMMAND ${CMAKE_COMMAND} -E copy ${DREAL_BINARY_DIR}/dReal ${DREAL_SOURCE_DIR}/../bin/
 )
+if(NOT BUILD_STATIC_BIN)
+  ADD_CUSTOM_COMMAND(TARGET dOp-bin
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${DREAL_SOURCE_DIR}/../bin
+            COMMAND ${CMAKE_COMMAND} -E copy ${DREAL_BINARY_DIR}/dOp ${DREAL_SOURCE_DIR}/../bin/
+  )
+endif()
 
 #########################################
 # CPack
 #########################################
 set(CPACK_PACKAGE_NAME dReal)
 string(TOLOWER ${CMAKE_SYSTEM_NAME} LOWER_SYSTEM_NAME)
-set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}")
+if(BUILD_SHARED_LIB)
+  set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}-shared-libs")
+else()
+  set(CPACK_PACKAGE_FILE_NAME "dReal-${DREAL_VERSION_MAJOR}.${DREAL_VERSION_MINOR}.${DREAL_VERSION_PATCH}-${LOWER_SYSTEM_NAME}")
+endif()
 set(CPACK_STRIP_FILES TRUE)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   SET(CPACK_GENERATOR TGZ)
@@ -472,6 +545,9 @@ endif()
 include(CPack)
 
 install(TARGETS dReal-bin DESTINATION bin)
+if(NOT BUILD_STATIC_BIN)
+  install(TARGETS dOp-bin DESTINATION bin)
+endif()
 install(FILES ${DREAL_SOURCE_DIR}/../bin/dReach DESTINATION bin
   PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
               GROUP_READ GROUP_WRITE GROUP_EXECUTE
@@ -487,8 +563,66 @@ endif()
 if(BUILD_SHARED_LIB)
   install(DIRECTORY "${DREAL_BINARY_DIR}/lib"
           DESTINATION ".")
-  install(FILES "${DREAL_BINARY_DIR}/libdreal.so"
-          DESTINATION "lib")
   install(FILES "${DREAL_SOURCE_DIR}/opensmt/api/opensmt_c.h"
           DESTINATION "include")
 endif()
+
+if(APPLE AND BUILD_SHARED_LIB)
+  add_custom_target(shared_lib
+    COMMAND echo "Building Shared Library..."
+    COMMAND cd lib && ${CMAKE_CXX_COMPILER} -fpic -shared -Wl,-all_load libdreal.a libcapd.a libibex.a libnlopt.a libprim.a libClp.a libClpSolver.a libCoinUtils.a -o libdreal.dylib
+    DEPENDS dreal CAPD4 IBEX FILIB CLP NLOPT
+  )
+endif()
+
+add_custom_target(update_pkgs
+  COMMAND echo "Update External Packages"
+  COMMAND ${CMAKE_BUILD_TOOL}
+  DEPENDS update_clp update_filib update_ibex update_nlopt update_capd update_catch update_pegtl update_easyloggingpp update_ezoptionparser update_json)
+
+add_custom_target(update_clp
+  COMMAND git fetch --all && git reset --hard origin/master && make install -j
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/CLP)
+
+add_custom_target(update_filib
+  COMMAND git fetch --all && git reset --hard origin/master && make install -j
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/FILIB)
+
+add_custom_target(update_ibex
+  COMMAND git fetch --all && git reset --hard origin/master && ./waf install
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/IBEX
+  DEPENDS update_filib update_clp)
+
+add_custom_target(update_nlopt
+  COMMAND git fetch --all && git reset --hard origin/master && make install -j
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/NLOPT)
+
+add_custom_target(update_capd
+  COMMAND git fetch --all && git reset --hard origin/master && make install -j
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/CAPD4)
+
+add_custom_target(update_catch
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/catch && cp -v single_include/catch.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/catch/
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/CATCH)
+
+add_custom_target(update_pegtl
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include && cp -v -r pegtl.hh pegtl ${CMAKE_CURRENT_BINARY_DIR}/include/
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/PEGTL)
+
+add_custom_target(update_easyloggingpp
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp && cp -v src/easylogging++.h ${CMAKE_CURRENT_BINARY_DIR}/include/easylogingpp/
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/EASYLOGGINGPP)
+
+add_custom_target(update_ezoptionparser
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/ezOptionParser/ && make PREFIX=${CMAKE_CURRENT_BINARY_DIR} install
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/EZOPTIONPARSER)
+
+add_custom_target(update_json
+  COMMAND git fetch --all && git reset --hard origin/master && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/include/json && cp -v src/json.hpp ${CMAKE_CURRENT_BINARY_DIR}/include/json/
+  WORKING_DIRECTORY ${DREAL_BINARY_DIR}/external/src/JSON)
+
+# Add a distclean target to the Makefile
+ADD_CUSTOM_TARGET(distclean
+  COMMAND ${CMAKE_BUILD_TOOL} "clean"
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_MODULE_PATH}/distclean.cmake"
+)

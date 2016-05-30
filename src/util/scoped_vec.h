@@ -3,7 +3,7 @@ Author: Soonho Kong <soonhok@cs.cmu.edu>
         Sicun Gao <sicung@cs.cmu.edu>
         Edmund Clarke <emc@cs.cmu.edu>
 
-dReal -- Copyright (C) 2013 - 2014, Soonho Kong, Sicun Gao, and Edmund Clarke
+dReal -- Copyright (C) 2013 - 2015, Soonho Kong, Sicun Gao, and Edmund Clarke
 
 dReal is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
 #pragma once
+#include <algorithm>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -33,12 +34,14 @@ template<typename T>
 class scoped_vec {
 private:
     typedef std::vector<T> vec;
-    typedef typename vec::value_type      value_type;
-    typedef typename vec::iterator        iterator;
-    typedef typename vec::const_iterator  const_iterator;
-    typedef typename vec::size_type       size_type;
-    typedef typename vec::reference       reference;
-    typedef typename vec::const_reference const_reference;
+    typedef typename vec::value_type             value_type;
+    typedef typename vec::iterator               iterator;
+    typedef typename vec::const_iterator         const_iterator;
+    typedef typename vec::reverse_iterator       reverse_iterator;
+    typedef typename vec::const_reverse_iterator const_reverse_iterator;
+    typedef typename vec::size_type              size_type;
+    typedef typename vec::reference              reference;
+    typedef typename vec::const_reference        const_reference;
 
     vec                   m_vec;
     std::vector<unsigned> m_scopes;
@@ -52,6 +55,12 @@ public:
     const_iterator end()    const { return m_vec.cend(); }
     const_iterator cbegin() const { return m_vec.cbegin(); }
     const_iterator cend()   const { return m_vec.cend(); }
+    reverse_iterator rbegin()              { return m_vec.rbegin(); }
+    reverse_iterator rend()                { return m_vec.rend(); }
+    const_reverse_iterator rbegin()  const { return m_vec.crbegin(); }
+    const_reverse_iterator rend()    const { return m_vec.crend(); }
+    const_reverse_iterator crbegin() const { return m_vec.crbegin(); }
+    const_reverse_iterator crend()   const { return m_vec.crend(); }
     void push_back(value_type const & v) { m_vec.push_back(v); }
     void push() { m_scopes.push_back(m_vec.size()); }
     unsigned int pop() {
@@ -95,6 +104,11 @@ public:
             }
         }
         return false;
+    }
+    vec get_reverse() const {
+        vec tmp = m_vec;
+        std::reverse(tmp.begin(), tmp.end());
+        return tmp;
     }
 };
 }  // namespace dreal

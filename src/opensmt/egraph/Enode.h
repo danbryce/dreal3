@@ -28,7 +28,6 @@ along with OpenSMT. If not, see <http://www.gnu.org/licenses/>.
 class Enode
 {
 public:
-
   //
   // Constructor for Enil
   //
@@ -170,6 +169,8 @@ public:
   //  inline bool isCostBound       ( ) const { return hasSymbolId( ENODE_ID_CTBOUND ); }
 
   bool        isVar               ( ) const; // True if it is a variable
+  bool        isExistVar          ( ) const; // True if it is a exist variable
+  bool        isForallVar         ( ) const; // True if it is a forall variable
   bool        isConstant          ( ) const; // True if it is a constant
   bool        isLit               ( ) const; // True if it is a literal
   bool        isAtom              ( ) const; // True if it is an atom
@@ -178,6 +179,8 @@ public:
   bool        isBooleanOperator   ( ) const; // True if it is a boolean operator
   bool        isArithmeticOp      ( ) const; // True if root is an arith term
   bool        isUFOp              ( ) const; // True if root is UF
+  void        setExistVar         ( );
+  void        setForallVar        ( );
 
   inline bool hasSortBool( ) const
   {
@@ -234,8 +237,8 @@ public:
   inline unsigned             getArity   ( ) const { return ((properties & ARITY_MASK) >> ARITY_SHIFT); }
   Snode *                     getSort    ( ) const { assert( isTerm( ) || isSymb( ) ); return isTerm( ) ? car->symb_data->sort : symb_data->sort; }
   Snode *                     getLastSort( );
-  inline string   getName                ( ) const { assert( isSymb( ) || isNumb( ) ); assert( symb_data ); return stripName( symb_data->name ); }
-  inline string   getNameFull            ( ) const { assert( isSymb( ) || isNumb( ) ); assert( symb_data ); return symb_data->name; }
+  inline std::string   getName           ( ) const { assert( isSymb( ) || isNumb( ) ); assert( symb_data ); return stripName( symb_data->name ); }
+  inline std::string   getNameFull       ( ) const { assert( isSymb( ) || isNumb( ) ); assert( symb_data ); return symb_data->name; }
   inline Enode *  getCar                 ( ) const { return car; }
   inline Enode *  getCdr                 ( ) const { return cdr; }
   inline Enode *  getDef                 ( ) const { assert( isDef( ) ); assert( car ); return car; }
@@ -252,20 +255,26 @@ public:
 
   double          getValue               ( ) const;
   std::unordered_set<Enode *> get_vars   ( );
+  std::unordered_set<Enode *> get_exist_vars ( );
+  std::unordered_set<Enode *> get_forall_vars ( );
   std::unordered_set<Enode *> get_constants   ( );
 
-  double          getDomainLowerBound          ( ) const; //added for dReal2
-  double          getDomainUpperBound          ( ) const; //added for dReal2
-  double          getValueLowerBound          ( ) const; //added for dReal2
-  double          getValueUpperBound          ( ) const; //added for dReal2
+  double          getDomainLowerBound    ( ) const; //added for dReal2
+  double          getDomainUpperBound    ( ) const; //added for dReal2
+  double          getValueLowerBound     ( ) const; //added for dReal2
+  double          getValueUpperBound     ( ) const; //added for dReal2
+  double          getBoundLowerBound     ( ) const; //added for dReal2
+  double          getBoundUpperBound     ( ) const; //added for dReal2
   double          getPrecision           ( ) const; //added for dReal2
   bool            hasPrecision           ( ) const; //added for dReal2
   double          getComplexValue        ( ) const;
   void            setValue               ( const double );
-  void            setDomainLowerBound          ( const double ); //added for dReal2
-  void            setDomainUpperBound          ( const double ); //added for dReal2
-  void            setValueLowerBound          ( const double ); //added for dReal2
-  void            setValueUpperBound          ( const double ); //added for dReal2
+  void            setDomainLowerBound    ( const double ); //added for dReal2
+  void            setDomainUpperBound    ( const double ); //added for dReal2
+  void            setBoundLowerBound     ( const double ); //added for dReal2
+  void            setBoundUpperBound     ( const double ); //added for dReal2
+  void            setValueLowerBound     ( const double ); //added for dReal2
+  void            setValueUpperBound     ( const double ); //added for dReal2
   void            setPrecision           ( const double ); //added for dReal2
   bool            hasValue               ( ) const;
   Enode *         getRoot                ( ) const;
@@ -356,11 +365,11 @@ public:
   bool           addToCongruence        ( ) const;
   unsigned       sizeInMem              ( ) const;
 
-  void           print_infix( ostream & os, lbool polarity, string const & variable_postfix = "") const;
-  void           print                  ( ostream & ) const; // Prints the
+  void           print_infix( std::ostream & os, lbool polarity, std::string const & variable_postfix = "") const;
+  void           print                  ( std::ostream & ) const; // Prints the
 
-  string         stripName              ( string ) const;
-  void           printSig               ( ostream & ); // Prints the enode signature
+  std::string    stripName              ( std::string ) const;
+  void           printSig               ( std::ostream & ); // Prints the enode signature
 
 #ifdef BUILD_64
   inline enodeid_pair_t          getSig    ( ) const { return encode( car->getRoot( )->getCid( ), cdr->getRoot( )->getCid( ) ); }
@@ -370,7 +379,7 @@ public:
   inline enodeid_t               getSigCar ( ) const { return car->getRoot( )->getCid( ); }
   inline enodeid_t               getSigCdr ( ) const { return cdr->getRoot( )->getCid( ); }
 
-  inline friend ostream &  operator<<( ostream & os, Enode const * const e )    { assert( e ); e->print( os ); return os; }
+  inline friend std::ostream &  operator<<( std::ostream & os, Enode const * const e )    { assert( e ); e->print( os ); return os; }
 
   struct idLessThan
   {
@@ -411,7 +420,10 @@ private:
   double            val_ub = +std::numeric_limits<double>::infinity(); // enode upper bound (value)
   double            dom_lb = -std::numeric_limits<double>::infinity(); // enode lower bound (domain)
   double            dom_ub = +std::numeric_limits<double>::infinity(); // enode upper bound (domain)
-  double            precision;   //added for dReal2
+  double            bound_lb = -std::numeric_limits<double>::infinity(); // enode lower bound (bound)
+  double            bound_ub = +std::numeric_limits<double>::infinity(); // enode upper bound (bound)
+  double            precision = 0.0;   //added for dReal2
+  bool              is_exist_var = true;
 
 #if 0
   Enode *           dynamic;    // Pointer to dynamic equivalent
@@ -444,6 +456,15 @@ inline double Enode::getValueLowerBound ( ) const
 inline double Enode::getValueUpperBound ( ) const
 {
     return val_ub;
+}
+inline double Enode::getBoundLowerBound ( ) const
+{
+    return bound_lb;
+}
+
+inline double Enode::getBoundUpperBound ( ) const
+{
+    return bound_ub;
 }
 
 inline double Enode::getPrecision ( ) const
@@ -479,12 +500,30 @@ inline void Enode::setDomainLowerBound ( const double v )
 {
   assert( isTerm( ) );
   dom_lb = v;
+  if (getBoundLowerBound() < v) {
+      setBoundLowerBound(v);
+  }
 }
 
 inline void Enode::setDomainUpperBound ( const double v )
 {
   assert( isTerm( ) );
   dom_ub = v;
+  if (getBoundUpperBound() > v) {
+      setBoundUpperBound(v);
+  }
+}
+
+inline void Enode::setBoundLowerBound ( const double v )
+{
+  assert( isTerm( ) );
+  bound_lb = v;
+}
+
+inline void Enode::setBoundUpperBound ( const double v )
+{
+  assert( isTerm( ) );
+  bound_ub = v;
 }
 
 inline void Enode::setValueLowerBound ( const double v )
@@ -502,9 +541,7 @@ inline void Enode::setValueUpperBound ( const double v )
 
 inline void Enode::setPrecision ( const double v )
 {
-  assert( isTerm( ) );
-
-  if( isNot() )
+  if( isTerm() && isNot() )
   {
     //only set precision on the atom (not the literal)
     get1st()->setPrecision(v);
@@ -614,6 +651,29 @@ inline bool Enode::isVar( ) const
   if ( getArity( ) != 0 ) return false;
   return car->isSymb( );                                     // Final check
 }
+
+inline bool Enode::isExistVar( ) const
+{
+  return isVar() && is_exist_var;
+}
+
+inline bool Enode::isForallVar( ) const
+{
+  return isVar() && !is_exist_var;
+}
+
+inline void Enode::setExistVar( )
+{
+  assert(isVar());
+  is_exist_var = true;
+}
+
+inline void Enode::setForallVar( )
+{
+  assert(isVar());
+  is_exist_var = false;
+}
+
 
 inline bool Enode::isConstant( ) const
 {

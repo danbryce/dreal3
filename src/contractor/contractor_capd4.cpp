@@ -20,9 +20,9 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 *********************************************************************/
 
 #include <algorithm>
+#include <exception>
 #include <functional>
 #include <initializer_list>
-#include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -37,23 +37,26 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "util/flow.h"
 #include "util/logging.h"
 #include "util/ibex_enode.h"
-#include "util/constraint.h"
+#include "constraint/constraint.h"
 #include "contractor/contractor.h"
 
 using std::make_shared;
 using std::function;
 using std::initializer_list;
+using std::ostringstream;
 using std::list;
 using std::string;
 using std::unordered_set;
 using std::vector;
+using std::logic_error;
+using std::exception;
 using nlohmann::json;
 
 namespace dreal {
 
-list<capd::interval> split(capd::interval const & i, unsigned n) {
+void split(capd::interval const & i, unsigned n, vector<capd::interval> & ret) {
     assert(i.leftBound() <= i.rightBound());
-    list<capd::interval> ret;
+    ret.reserve(ret.size() + n);
     double lb = i.leftBound();
     double const rb = i.rightBound();
     double const width = rb - lb;
@@ -66,7 +69,6 @@ list<capd::interval> split(capd::interval const & i, unsigned n) {
     if (lb < rb) {
         ret.emplace_back(lb, rb);
     }
-    return ret;
 }
 
 bool contain_nan(capd::IVector const & v) {
@@ -106,7 +108,7 @@ string subst(Enode const * const e, unordered_map<string, string> subst_map) {
         string name = e->getName();
         if (name.find('e') != std::string::npos || name.find('E') != std::string::npos) {
             // Scientific Notation
-            stringstream ss;
+            ostringstream ss;
             double const r = stod(name);
             ss << setprecision(16) << std::fixed << r;
             name = ss.str();
@@ -210,11 +212,11 @@ string subst(Enode const * const e, unordered_map<string, string> subst_map) {
             ret += "]";
         }
     } else if (e->isDef()) {
-        throw std::logic_error("unreachable");
+        throw logic_error("unreachable");
     } else if (e->isEnil()) {
-        throw std::logic_error("unreachable");
+        throw logic_error("unreachable");
     } else {
-        throw std::logic_error("unreachable");
+        throw logic_error("unreachable");
     }
     return ret;
 }
@@ -245,13 +247,14 @@ string build_capd_string(integral_constraint const & ic, bool forward = true) {
 
     // Call Subst, and collect strings
     vector<string> ode_strs;
+    ode_strs.reserve(vars_0.size());
     for (unsigned i = 0; i < vars_0.size(); i++) {
         Enode * const ode = odes[i].second;
         string ode_str = subst(ode, subst_map);
         if (!forward) {
             ode_str = "-" + ode_str;
         }
-        ode_strs.push_back(ode_str);
+        ode_strs.emplace_back(ode_str);
     }
 
     string diff_var   = "";
@@ -259,15 +262,17 @@ string build_capd_string(integral_constraint const & ic, bool forward = true) {
     string diff_fun   = "";
     if (vars_0.size() > 0) {
         vector<string> vars_0_strs;
+        vars_0_strs.reserve(vars_0.size());
         for (auto const & var : vars_0) {
-            vars_0_strs.push_back(var->getCar()->getName());
+            vars_0_strs.emplace_back(var->getCar()->getName());
         }
         diff_var = "var:" + join(vars_0_strs, ", ") + ";";
     }
     if (pars_0.size() > 0) {
         vector<string> pars_0_strs;
+        pars_0_strs.reserve(pars_0.size());
         for (auto const & par : pars_0) {
-            pars_0_strs.push_back(par->getCar()->getName());
+            pars_0_strs.emplace_back(par->getCar()->getName());
         }
         diff_par = "par:" + join(pars_0_strs, ", ") + ";";
     }
@@ -280,7 +285,7 @@ string build_capd_string(integral_constraint const & ic, bool forward = true) {
     return diff_var + diff_par + diff_fun;
 }
 
-capd::IVector extract_ivector(box const & b, std::vector<Enode *> const & vars) {
+capd::IVector extract_ivector(box const & b, vector<Enode *> const & vars) {
     capd::IVector intvs(vars.size());
     for (unsigned i = 0; i < vars.size(); i++) {
         Enode * const var = vars[i];
@@ -290,8 +295,7 @@ capd::IVector extract_ivector(box const & b, std::vector<Enode *> const & vars) 
     return intvs;
 }
 
-void update_box_with_ivector(box & b, std::vector<Enode *> const & vars, capd::IVector iv) {
-    DREAL_LOG_INFO << "update_box_with_ivector: [before update]";
+void update_box_with_ivector(box & b, vector<Enode *> const & vars, capd::IVector iv) {
     capd::IVector intvs(vars.size());
     for (unsigned i = 0; i < vars.size(); i++) {
         b[vars[i]] = ibex::Interval(iv[i].leftBound(), iv[i].rightBound());
@@ -352,14 +356,13 @@ contractor_capd_fwd_full::contractor_capd_fwd_full(box const & box, ode_constrai
         // Trivial Case with all params and no ODE variables
     }
 
-    // TODO(soonhok): Setup Input and Output
-    // Input X_0, X_T, and Time
-    // for (unsigned i = 0; i <  input->size(); i++) {
-    //     if ((*input)[i]) {
-    //         m_input.add(box.get_index(m_var_array[i].name));
-    //     }
-    // }
-    // Output X_T and Time
+    // Input: X_0, X_T, and Time
+    m_input  = ibex::BitSet::empty(box.size());
+    for (Enode * e : ctr->get_ic().get_enode()->get_vars()) {
+        m_input.add(box.get_index(e));
+    }
+    // Output: Empty
+    m_output = ibex::BitSet::empty(box.size());
     m_used_constraints.insert(m_ctr);
 }
 
@@ -374,20 +377,20 @@ bool compute_enclosures(capd::IOdeSolver & solver, capd::interval const & prevTi
     capd::IOdeSolver::SolutionCurve const & curve = solver.getCurve();
     capd::interval domain = capd::interval(0, 1) * stepMade;
 
-    list<capd::interval> intvs;
+    vector<capd::interval> intvs;
     if (!add_all && (prevTime.rightBound() < T.leftBound())) {
-        capd::interval pre_T = capd::interval(0, T.leftBound() - prevTime.rightBound());
+        capd::interval const pre_T(0, T.leftBound() - prevTime.rightBound());
         domain.setLeftBound(T.leftBound() - prevTime.rightBound());
-        intvs = split(domain, grid_size);
-        intvs.push_front(pre_T);
+        intvs.push_back(pre_T);
+        split(domain, grid_size, intvs);
     } else {
-        intvs = split(domain, grid_size);
+        split(domain, grid_size, intvs);
     }
-
+    enclosures.reserve(enclosures.size() + intvs.size());
     for (capd::interval const & subsetOfDomain : intvs) {
         DREAL_LOG_INFO << "compute_enclosures: subsetOfDomain = " << subsetOfDomain;
-        capd::interval dt = prevTime + subsetOfDomain;
-        capd::IVector v = curve(subsetOfDomain);
+        capd::interval const dt = prevTime + subsetOfDomain;
+        capd::IVector  const  v = curve(subsetOfDomain);
         // TODO(soonhok): check invariant
         // if (!check_invariant(v, m_inv)) {
         DREAL_LOG_INFO << "compute_enclosures:" << dt << "\t" << v;
@@ -411,11 +414,11 @@ bool filter(vector<pair<capd::interval, capd::IVector>> & enclosures, capd::IVec
         }
     }
     enclosures.erase(remove_if(enclosures.begin(), enclosures.end(),
-                            [](pair<capd::interval, capd::IVector> const & item) {
-                                capd::interval const & dt = item.first;
-                                return dt.leftBound() == 0.0 && dt.rightBound() == 0.0;
-                            }),
-                 enclosures.end());
+                               [](pair<capd::interval, capd::IVector> const & item) {
+                                   capd::interval const & dt = item.first;
+                                   return dt.leftBound() == 0.0 && dt.rightBound() == 0.0;
+                               }),
+                     enclosures.end());
     if (enclosures.empty()) {
         return false;
     } else {
@@ -459,10 +462,17 @@ void set_params(T & f, box const & b, integral_constraint const & ic) {
     }
 }
 
-box contractor_capd_fwd_full::prune(box b, SMTConfig &) const {
-    DREAL_LOG_INFO << "contractor_capd_fwd_full::prune";
+box contractor_capd_fwd_full::prune(box b, SMTConfig & config) const {
+    static thread_local box old_box(b);
+    old_box = b;
+    DREAL_LOG_DEBUG << "contractor_capd_fwd_full::prune";
     integral_constraint const & ic = m_ctr->get_ic();
     b = intersect_params(b, ic);
+    if (b.is_empty()) {
+        m_output  = ibex::BitSet::all(b.size());
+        return b;
+    }
+    m_output  = ibex::BitSet::empty(b.size());
     if (!m_solver) {
         // Trivial Case where there are only params and no real ODE vars.
         return b;
@@ -520,6 +530,12 @@ box contractor_capd_fwd_full::prune(box b, SMTConfig &) const {
         throw contractor_exception(e.what());
     } catch (capd::ISolverException & e) {
         throw contractor_exception(e.what());
+    }
+    vector<bool> diff_dims = b.diff_dims(old_box);
+    for (unsigned i = 0; i < diff_dims.size(); i++) {
+        if (diff_dims[i]) {
+            m_output.add(i);
+        }
     }
     return b;
 }
@@ -599,7 +615,7 @@ json contractor_capd_fwd_full::generate_trace(box b, SMTConfig &) const {
         throw contractor_exception(e.what());
     } catch (capd::ISolverException & e) {
         throw contractor_exception(e.what());
-    } catch (std::exception & e) {
+    } catch (exception & e) {
         throw contractor_exception(e.what());
     }
 }
@@ -622,7 +638,7 @@ ostream & contractor_capd_bwd_simple::display(ostream & out) const {
     return out;
 }
 
-contractor_capd_bwd_full::contractor_capd_bwd_full(box const & /*box*/, ode_constraint const * const ctr, unsigned const taylor_order, unsigned const grid_size)
+contractor_capd_bwd_full::contractor_capd_bwd_full(box const & box, ode_constraint const * const ctr, unsigned const taylor_order, unsigned const grid_size)
     : contractor_cell(contractor_kind::CAPD_BWD), m_ctr(ctr), m_taylor_order(taylor_order), m_grid_size(grid_size) {
     DREAL_LOG_INFO << "contractor_capd_bwd_full::contractor_capd_bwd_full()";
     integral_constraint const & ic = m_ctr->get_ic();
@@ -635,7 +651,14 @@ contractor_capd_bwd_full::contractor_capd_bwd_full(box const & /*box*/, ode_cons
     } else {
         // Trivial Case with all params and no ODE variables
     }
-    // TODO(soonhok): Setup Input and Output
+
+    // Input: X_0, X_T, and Time
+    m_input  = ibex::BitSet::empty(box.size());
+    for (Enode * e : ctr->get_ic().get_enode()->get_vars()) {
+        m_input.add(box.get_index(e));
+    }
+    // Output: Empty
+    m_output = ibex::BitSet::empty(box.size());
     m_used_constraints.insert(m_ctr);
 }
 
@@ -645,10 +668,17 @@ contractor_capd_bwd_full::~contractor_capd_bwd_full() {
     delete m_vectorField;
 }
 
-box contractor_capd_bwd_full::prune(box b, SMTConfig &) const {
-    DREAL_LOG_INFO << "contractor_capd_bwd_full::prune";
+box contractor_capd_bwd_full::prune(box b, SMTConfig & config) const {
+    static thread_local box old_box(b);
+    old_box = b;
+    DREAL_LOG_DEBUG << "contractor_capd_bwd_full::prune";
     integral_constraint const & ic = m_ctr->get_ic();
     b = intersect_params(b, ic);
+    if (b.is_empty()) {
+        m_output  = ibex::BitSet::all(b.size());
+        return b;
+    }
+    m_output  = ibex::BitSet::empty(b.size());
     if (!m_solver) {
         // Trivial Case where there are only params and no real ODE vars.
         return b;
@@ -674,7 +704,7 @@ box contractor_capd_bwd_full::prune(box b, SMTConfig &) const {
             // Move s toward m_T.rightBound()
             (*m_timeMap)(m_T.rightBound(), s);
             if (contain_nan(s)) {
-                DREAL_LOG_INFO << "ode_solver::compute_forward: contain NaN";
+                DREAL_LOG_INFO << "contractor_capd_bwd_full: contain NaN";
             }
 
             if (m_T.leftBound() <= m_timeMap->getCurrentTime().rightBound()) {
@@ -683,7 +713,7 @@ box contractor_capd_bwd_full::prune(box b, SMTConfig &) const {
                 bool invariantViolated = compute_enclosures(*m_solver, prevTime, m_T, m_grid_size, enclosures);
                 if (invariantViolated) {
                     // TODO(soonhok): invariant
-                    DREAL_LOG_INFO << "ode_solver::compute_forward: invariant violated";
+                    DREAL_LOG_INFO << "contractor_capd_bwd_full: invariant violated";
                     // ret = ODE_result::SAT;
                     break;
                 }
@@ -706,6 +736,12 @@ box contractor_capd_bwd_full::prune(box b, SMTConfig &) const {
         throw contractor_exception(e.what());
     } catch (capd::ISolverException & e) {
         throw contractor_exception(e.what());
+    }
+    vector<bool> diff_dims = b.diff_dims(old_box);
+    for (unsigned i = 0; i < diff_dims.size(); i++) {
+        if (diff_dims[i]) {
+            m_output.add(i);
+        }
     }
     return b;
 }

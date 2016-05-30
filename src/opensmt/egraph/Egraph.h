@@ -128,7 +128,7 @@ public:
   //===========================================================================
   // Public APIs for enode construction/destruction
 
-  Enode *  newSymbol           ( const char *, Snode * );                                        // Creates a new symbol
+  Enode *  newSymbol           ( const char *, Snode *, bool isModelVar = false, double p = 0.0 );                        // Creates a new symbol
   Enode *  cons                ( list< Enode * > & );                                            // Shortcut, but not efficient
   Enode *  cons                ( Enode *, Enode * );                                             // Create Lists/Terms
   Enode *  cons                ( Enode *, Enode *, bool & );                                     // Create Lists/Terms; notifies if already existent
@@ -199,7 +199,7 @@ public:
   Enode * mkLog              ( Enode * );
   Enode * mkPow              ( Enode * );
   Enode * mkForallT          ( Enode *, Enode *, Enode *, Enode * );
-  Enode * mkIntegral         ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, char * flowname );
+  Enode * mkIntegral         ( Enode * time_0, Enode * time_t, Enode * vec_0, Enode * vec_t, const char * flowname );
   Enode * mkForall ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
   Enode * mkExists ( vector<pair<string, Snode *>*>* sorted_var_list, Enode * e);
 
@@ -619,9 +619,9 @@ private:
   vector< bool >                 arrayAtomTermDone;
 
 #ifdef BUILD_64
-  hash_set< enodeid_pair_t >     clauses_sent;
+  unordered_set< enodeid_pair_t >     clauses_sent;
 #else
-  hash_set< Pair( enodeid_t ) >  clauses_sent;
+  unordered_set< Pair( enodeid_t ) >  clauses_sent;
 #endif
 
   //===========================================================================

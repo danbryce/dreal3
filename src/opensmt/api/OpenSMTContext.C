@@ -875,9 +875,7 @@ void OpenSMTContext::PrintResult( const lbool & result, const lbool & config_sta
         << " " << config.icp_decisions()
               << endl;
         }
-        if(nra && config.nra_model){
-          solver.printCurrentAssignment(config.nra_model_out, true);
-        }
+       
       }
     }
 

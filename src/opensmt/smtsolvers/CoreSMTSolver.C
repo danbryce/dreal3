@@ -1995,6 +1995,9 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
 
             if (config.nra_short_sat) {
               // the problem is satisfiable as res = 1 at this point
+	      if(config.nra_model){
+		printCurrentAssignment(config.nra_model_out);
+	      }
               return l_True;
             }
             // Otherwise we still have to make sure that
@@ -2009,8 +2012,8 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
                             << decisions << endl;
             if(DREAL_LOG_DEBUG_IS_ON){
               DREAL_LOG_DEBUG << "Model is:";
-              printCurrentAssignment(std::cout);
-            }
+              printCurrentAssignment(std::cout);	     
+            }	    
             return l_True;
           }
         }

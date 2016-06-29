@@ -1547,15 +1547,15 @@ let compile_pruned (h : Hybrid.t) (k : int) (heuristic : Costmap.t)  (heuristic_
 
 let compile (h : Network.t) (k : int) (path : (string list) option) (heuristic : Costmap.t list option) =
   let logic_cmd = SetLogic QF_NRA_ODE in
-  let (vardecl_cmds, assert_cmds) =  match List.length (Network.automata h) with
-      1 ->  compile_vardecl_unit (List.hd (Network.automata h)) k path
-    | _ ->  compile_vardecl h k path heuristic in
-  let defineodes = match List.length (Network.automata h) with
-      1 ->  compile_ode_definition_unit (List.hd (Network.automata h)) k
-     | _ -> compile_ode_definition h k heuristic in
-  let assert_formula = match List.length (Network.automata h) with
-      1 -> [compile_logic_formula_unit (List.hd (Network.automata h)) k path]
-    | _ -> compile_logic_formula h k path heuristic in
+  let (vardecl_cmds, assert_cmds) =  match List.length (Network.automata h) == 1  && (String.equal (Hybrid.name (List.hd h.automata)) "singleton0") with
+      true ->  compile_vardecl_unit (List.hd (Network.automata h)) k path
+    | false ->  compile_vardecl h k path heuristic in
+  let defineodes = match List.length (Network.automata h) == 1 && (String.equal (Hybrid.name (List.hd h.automata)) "singleton0") with
+      true ->  compile_ode_definition_unit (List.hd (Network.automata h)) k
+     | false -> compile_ode_definition h k heuristic in
+  let assert_formula = match List.length (Network.automata h) == 1 && (String.equal (Hybrid.name (List.hd h.automata)) "singleton0") with
+      true -> [compile_logic_formula_unit (List.hd (Network.automata h)) k path]
+    | false -> compile_logic_formula h k path heuristic in
   List.flatten
     [[logic_cmd];
      vardecl_cmds;
@@ -1568,7 +1568,8 @@ let compile (h : Network.t) (k : int) (path : (string list) option) (heuristic :
 (** Enumerate all possible paths of length k in Hybrid Model h *)
 let pathgen (n : Network.t) (k : int) : (string list) list =
   let automata = Network.automata n in
-  let h = match List.length automata == 1 with
+  (* let () = Printf.fprintf IO.stdout "name = %s\n" (Hybrid.name (List.hd automata)) in *)
+  let h = match List.length automata == 1 && (String.equal (Hybrid.name (List.hd automata)) "singleton0") with
     | true -> List.hd automata
     | false -> raise (Error.Pathgen_Error ("Pathgen implementation currently only supports unlabeled singleton Networks.")) in
   let init_mode_id = h.init_id in

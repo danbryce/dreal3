@@ -824,32 +824,35 @@ let mk_init_network n =
         Basic.make_and inits
 
 let mk_goal_network n k heuristic =
-  let (mode_list, form) = Network.goals n in
-  let form_mapped = Basic.subst_formula (mk_variable k "_t") form in
-  let auta = Network.automata n in
-  let reachable = List.mapi (fun i a -> (a, filter_aut_mode_distance a k heuristic i)) auta in
-  let enforcement = List.map (fun x ->
-                begin
-                        let (aut, mode) = x in
-                        let a_obj = try List.find (fun a -> (Hybrid.name a) = aut) auta
-                                    with e -> Printexc.print_backtrace IO.stderr; raise e
-                        in
-                        let autmode =
-                          try Map.find x (Modemapping.name_to_obj (Network.modemapping n))
-                          with  e ->
-                            Printexc.print_backtrace IO.stderr;
-                            raise e
-                        in
-                        let (r_aut, r_modes) = List.find (fun (a, modes) -> a = a_obj) reachable in
-                        match List.mem autmode r_modes with
-                        | false -> False
-                        | true -> mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)
-                end
-        )
-                                   mode_list in
-        (* If have single automaton, then goals are disjunctive, otherwise conjunctive *)
-  Basic.make_and [form_mapped;(Basic.make_and enforcement)]
-
+  Basic.make_or
+    (List.map
+       (fun goal ->
+	let (mode_list, form) = goal in
+	let form_mapped = Basic.subst_formula (mk_variable k "_t") form in
+	let auta = Network.automata n in
+	let reachable = List.mapi (fun i a -> (a, filter_aut_mode_distance a k heuristic i)) auta in
+	let enforcement = List.map (fun x ->
+				    begin
+				      let (aut, mode) = x in
+				      let a_obj = try List.find (fun a -> (Hybrid.name a) = aut) auta
+						  with e -> Printexc.print_backtrace IO.stderr; raise e
+				      in
+				      let autmode =
+					try Map.find x (Modemapping.name_to_obj (Network.modemapping n))
+					with  e ->
+					  Printexc.print_backtrace IO.stderr;
+					  raise e
+				      in
+				      let (r_aut, r_modes) = List.find (fun (a, modes) -> a = a_obj) reachable in
+				      match List.mem autmode r_modes with
+				      | false -> False
+				      | true -> mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)
+				    end
+				   )
+				   mode_list in
+	Basic.make_and [form_mapped;(Basic.make_and enforcement)])
+       (Network.goals n))
+    
 let split_decls_assertions lst path =
         List.split
       (List.map
@@ -947,7 +950,7 @@ let mk_jump aut j i =
     ) in
         let guard_mapped = Basic.subst_formula (mk_variable i "_t") guard in
         let change_mapped = Basic.subst_formula (mk_jmp_variable i) change in
-        Basic.make_and [guard_mapped; change_mapped(*; change_unused*)]
+        Basic.make_and [guard_mapped; change_mapped ; change_unused ]
 
 let trans_jump aut j i =
         let (org, lab, des, jmp) = j in
@@ -962,7 +965,7 @@ let trans_jump_sync aut j i =
         let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
         let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
         let jmp = mk_jump aut j i in
-        let enforcement = Basic.make_and [enforce_org; enforce_des] in
+	let enforcement = Basic.make_and [enforce_org; enforce_des] in
         let glab = Hybrid.labellist aut in
         let inter = lst_intersection lab glab in
         let ninter = List.filter (fun x -> not (List.mem x inter)) glab in
@@ -974,11 +977,18 @@ let trans_jump_sync_noop aut i heuristic ia =
         let amodes = filter_aut_mode_distance aut i heuristic ia in
         let glab = Hybrid.labellist aut in
         List.map (
-                fun m -> begin
+            fun m -> begin
+		    let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
+		    let change_unused =
+                      Basic.make_and (List.map (fun name ->
+						Basic.Eq (Basic.Var (mk_variable i "_t" name), Basic.Var (mk_variable (i+1) "_0" name))						
+					       )
+					       aut_vars
+				     ) in
                         let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
                         let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId m) in
                         let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId m) in
-                        Basic.make_and [syncs; enforce_org; enforce_des]
+                        Basic.make_and [syncs; enforce_org; enforce_des; change_unused]
                 end
         ) amodes
 
@@ -988,10 +998,18 @@ let mk_noop aut mode =
         Jump.make (True, Mode.mode_id mode, change, [])
 
 let mk_noop_global aut i =
-        let glab = Hybrid.labellist aut in
-        let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
-        let enforce = Basic.Eq (Basic.Var (mk_enforce (i+1) aut), Basic.Var (mk_enforce i aut)) in
-        Basic.make_and [syncs; enforce]
+  let glab = Hybrid.labellist aut in
+  let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
+  let change_unused =
+    Basic.make_and (List.map (fun name ->
+			      Basic.Eq (Basic.Var (mk_variable i "_t" name), Basic.Var (mk_variable (i+1) "_0" name))						
+			     )
+			     aut_vars
+		   ) in
+  
+  let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
+  let enforce = Basic.Eq (Basic.Var (mk_enforce (i+1) aut), Basic.Var (mk_enforce i aut)) in
+  Basic.make_and [change_unused; syncs; enforce]
 
 let trans n aut i k heuristic ia =
         let name = Hybrid.name aut in
@@ -1044,7 +1062,7 @@ let get_labeled_jumptable n aut_jlist =
         List.map (fun l -> (l, List.map (fun aj -> get_all_jumps_for_label l aj) aut_jlist)) labels
 
 let create_jumplist j jlothers cur =
-        j::(List.map (fun (aut, jmps) -> (aut, List.at jmps (List.assoc aut cur))) jlothers)
+       j::(List.map (fun (aut, jmps) -> (aut, List.at jmps (List.assoc aut cur))) jlothers)
 
 let idx_list_op op lst idx =
         let lNum = List.of_enum (0 -- ((List.length lst)-1)) in
@@ -1154,9 +1172,9 @@ let trans_network n i k heuristic =
         let jumplst = List.mapi (fun ia a -> (a, trans n a i k heuristic ia, trans_jump_sync_noop a i heuristic ia)) automata in
         let ax = List.map (fun (a, jlist, nooplist) ->
                 begin
-                        let jmpor = Basic.make_or (List.map (fun j -> trans_jump_sync a j i) jlist) in
-                        let noopr = Basic.make_or nooplist in
-                        Basic.make_or [mk_noop_global a i; jmpor] (*[noopr; jmpor]*)
+                  let jmpor = Basic.make_or (List.map (fun j -> trans_jump_sync a j i) jlist) in
+                  let noopr = Basic.make_or nooplist in
+                  Basic.make_or [jmpor;mk_noop_global a i] (*[noopr; jmpor]*)
                 end
         )
         jumplst in
@@ -1372,7 +1390,11 @@ let compile_logic_formula (h : Network.t)
   let list_of_steps = List.of_enum (0 -- (k-1)) in
   let steps = match path with
     | None ->
-       Basic.make_and (List.map (fun x -> Basic.make_and [(mk_mode_mutex h x k heuristic);
+       Basic.make_and (List.map (fun x ->
+(*				 let () = Basic.print_formula IO.stdout (trans_network h x k heuristic) in
+				 let () = print_endline "" in
+ *)	
+				 Basic.make_and [(*(mk_mode_mutex h x k heuristic);*)
                                                           (mk_active h x k heuristic);
                                                           (mk_maintain h x k heuristic);
                                                           (trans_network h x k heuristic);
@@ -1385,8 +1407,8 @@ let compile_logic_formula (h : Network.t)
                                           (List.take k p)
                                           list_of_steps)
     in
-  let goal_clause = Basic.make_and [(mk_goal_network h k heuristic);(mk_mode_mutex h k k heuristic)] in
-  let end_step = Basic.make_and [(mk_active h k k heuristic); (mk_maintain h k k heuristic)] in
+    let goal_clause = Basic.make_and [(mk_goal_network h k heuristic) (*;(mk_mode_mutex h k k heuristic)*)] in
+    let end_step = Basic.make_and [(mk_active h k k heuristic); (mk_maintain h k k heuristic)] in
   [(Assert init_clause); (Assert steps); (Assert end_step); (Assert goal_clause)]
 
 let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (heuristic : Costmap.t list option) =

@@ -248,6 +248,7 @@ do
 
         #Solve
         echo "${SOLVER} ${MY_SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta --sat-prep-bool 2>&1 | tee $OUT"
+
         ${SOLVER} ${MY_SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta --sat-prep-bool 2>&1 | tee $OUT
         #        ${SOLVER} ${MY_SOLVER_OPT} ${SMT} --short_sat --delta_heuristic --delta  2>&1 | tee $OUT
         RESULT=`tail -n 1 $OUT`

@@ -850,7 +850,6 @@ bool schedule_heuristic::unwind_path() {
   bool schedule_heuristic::getSuggestions()  {
     DREAL_LOG_INFO << "schedule_heuristic::getSuggestions()";
     //displayTrail();
-    
     bool suggestion_consistent = isStackConsistentWithSuggestion();
 
     m_is_initialized = true;

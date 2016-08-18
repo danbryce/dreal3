@@ -121,7 +121,7 @@ double mcts_node::simulate() {
 
 void mcts_node::backpropagate() {
     // DREAL_LOG_INFO << "mcts_node::backpropagate(" << m_id << ") size = " << m_size;
-  m_visits++;
+    m_visits++;
     if (!m_children_list.empty()) {
       m_visits++;
       m_size = 0;

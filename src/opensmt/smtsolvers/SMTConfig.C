@@ -426,6 +426,9 @@ SMTConfig::parseCMDLine( int argc
     opt.add("" , false, 1, 0,
             "PDDL+ heuristic",
             "--plan-heuristic", "--plan_heuristic");
+    opt.add("" , false, 1, 0,
+            "Hybrid Scheduling heuristic",
+            "--schedule-heuristic", "--schedule_heuristic");
     opt.add("", false, 0, 0,
             "short cut SAT solver assignments if SAT",
             "--short-sat", "--short_sat");
@@ -751,6 +754,7 @@ SMTConfig::parseCMDLine( int argc
     // Extract String Args
     if (opt.isSet("--bmc-heuristic")) { opt.get("--bmc-heuristic")->getString(nra_bmc_heuristic); }
     if (opt.isSet("--plan-heuristic")) { opt.get("--plan-heuristic")->getString(nra_plan_heuristic); }
+    if (opt.isSet("--schedule-heuristic")) { opt.get("--schedule-heuristic")->getString(nra_schedule_heuristic); }
 
     // Extract ULong Args
     if (opt.isSet("--ode-order")) { opt.get("--ode-order")->getULong(nra_ODE_taylor_order); }

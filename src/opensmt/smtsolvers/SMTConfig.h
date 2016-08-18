@@ -239,6 +239,7 @@ struct SMTConfig
   std::string  nra_plan_heuristic;
   std::string  nra_plan_domain;               // planning domain
   std::string  nra_plan_problem;              // planning instance
+  std::string  nra_schedule_heuristic;        // hybrid scheduling heuristic
   int          nra_icp_decisions;             // number of icp branch nodes
   bool         nra_show_search_progress;      // print search progress to console
   bool         nra_heuristic_forward;         // use forward search in the heuristic solution

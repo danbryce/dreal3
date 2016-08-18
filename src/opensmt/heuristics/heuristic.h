@@ -71,5 +71,6 @@ class heuristic {
     Egraph * m_egraph;
     std::set<Enode*> stack_literals;
     SMTConfig *m_config;
+    int lastDecisionStackEnd;
   };
 }

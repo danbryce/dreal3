@@ -117,7 +117,6 @@ public:
     std::vector<std::vector<labeled_transition*>*> m_init_mode;
     std::vector<std::vector<labeled_transition*>*> m_goal_modes;
     std::vector<std::pair<int, std::vector<labeled_transition*>*>*> m_decision_stack;
-    int m_depth;
     std::vector<Enode*> default_false_suggestions;
     std::vector<Enode*> default_true_suggestions;
     std::vector<std::map< Enode *, std::pair<int, int>* >*> mode_literals;
@@ -141,7 +140,6 @@ public:
     bool can_synchronize(std::vector<std::pair<int, labeled_transition*>*>& parallel_transitions,
                                          std::pair<int, labeled_transition*> &trans);
     std::string network_to_string();
-    int lastDecisionStackEnd;
 public:
     struct SubgoalCompare {
     SubgoalCompare(int a, hybrid_heuristic& c) : myHeuristic(c), autom(a) { srand(time(NULL));}

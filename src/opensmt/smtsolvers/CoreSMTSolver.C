@@ -46,6 +46,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "egraph/Egraph.h"
 #include "heuristics/heuristic.h"
+#include "heuristics/schedule_heuristic.h"
 #include "heuristics/hybrid_heuristic.h"
 #include "heuristics/plan_heuristic.h"
 #include "minisat/mtl/Alg.h"
@@ -128,6 +129,8 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
 
   if(c.nra_plan_heuristic.compare("") != 0){
     heuristic = new dreal::plan_heuristic();
+  } else if(c.nra_schedule_heuristic.compare("") != 0){
+    heuristic = new dreal::schedule_heuristic();
   } else if(c.nra_bmc_heuristic.compare("") != 0){
     heuristic = new dreal::hybrid_heuristic();
   } else {
@@ -381,18 +384,15 @@ bool CoreSMTSolver::addClause( vec<Lit>& ps
 
 
 void CoreSMTSolver::attachClause(Clause& c) {
-  DREAL_LOG_DEBUG << "CoreSMTSolver::attachClause() ";
+  // DREAL_LOG_DEBUG << "CoreSMTSolver::attachClause() ";
 
-  DREAL_LOG_DEBUG << "(";
-  for (int i = 0; i < c.size(); i++){
-    DREAL_LOG_DEBUG << theory_handler->varToEnode(var(c[i])) << " = " << toInt(lbool(!sign(c[i])));
-    if(i < c.size()-1)
-      DREAL_LOG_DEBUG << " ";
-  }
-  DREAL_LOG_DEBUG << ")";
-
-
-
+  // DREAL_LOG_DEBUG << "(";
+  // for (int i = 0; i < c.size(); i++){
+  //   DREAL_LOG_DEBUG << theory_handler->varToEnode(var(c[i])) << " = " << toInt(lbool(!sign(c[i])));
+  //   if(i < c.size()-1)
+  //     DREAL_LOG_DEBUG << " ";
+  // }
+  // DREAL_LOG_DEBUG << ")";
   assert(c.size() > 1);
   watches[toInt(~c[0])].push(&c);
   watches[toInt(~c[1])].push(&c);
@@ -1554,7 +1554,8 @@ CoreSMTSolver::popBacktrackPoint ( )
       egraph.addAssertion(last_unchecked_assertion);
   }
 
-  if(config.nra_plan_heuristic.compare("") != 0){
+  if(config.nra_plan_heuristic.compare("") != 0 ||
+     config.nra_schedule_heuristic.compare("") != 0){
     heuristic->backtrack();
   }
 

@@ -1128,7 +1128,6 @@ bool hybrid_heuristic::pbacktrack() {
 
 string hybrid_heuristic::pathStackToString() {
     stringstream ss;
-    cout << "HI" << endl;
     ss << "Path Stack:\n";
     for (int time = 0; time < m_depth + 1; time++) {
         stringstream label;

@@ -34,6 +34,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "util/logging.h"
 #include "util/mcts_node.h"
 #include "util/stat.h"
+#include "constraint/constraint.h"
 
 using std::vector;
 using std::tuple;
@@ -90,25 +91,27 @@ void icp_mcts_expander::expand(mcts_node * node) {
 double icp_mcts_expander::simulate(mcts_node * node) {
     icp_mcts_node * icp_node = NULL;
     int simulation_steps = 0;
+    box * last_non_empty_box = NULL;
 
     if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
         m_cs.m_box = icp_node->get_box();
         while (!m_cs.m_box.is_empty() && !m_cs.m_box.is_point()) {  // either not unsat or not sat
             vector<int> const sorted_dims =
                 m_brancher.sort_branches(m_cs.m_box, m_ctrs, m_ctc.get_input(), m_cs.m_config, 1);
-            DREAL_LOG_INFO << "icp_mcts_simulator::simulate() |sorted_dims| = "
-                           << sorted_dims.size();
+            // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() |sorted_dims| = "
+            //                << sorted_dims.size();
             if (sorted_dims.size() > 0) {
                 int const i = sorted_dims.front();
                 DREAL_LOG_INFO << "icp_mcts_simulator::simulate() sampling dimension = " << i;
-                DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << m_cs.m_box;
+                // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << m_cs.m_box;
                 m_cs.m_box = m_cs.m_box.sample_dimension(i);
-                DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
-
+                // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
+                delete last_non_empty_box;
+                last_non_empty_box = new box(m_cs.m_box);
                 try {
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
                     m_ctc.prune(m_cs);
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
                 } catch (contractor_exception & e) {
                     // Do nothing
                 }
@@ -118,28 +121,29 @@ double icp_mcts_expander::simulate(mcts_node * node) {
                 box prev(m_cs.m_box);
                 DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found non-point ";
                 DREAL_LOG_INFO << "icp_mcts_simulator::simulate() setting dimension lb = " << i;
-                DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << m_cs.m_box;
+                // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << m_cs.m_box;
                 m_cs.m_box = m_cs.m_box.set_dimension_lb(i);
-                DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
+                // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
 
                 try {
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
                     m_ctc.prune(m_cs);
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
                 } catch (contractor_exception & e) {
                     // Do nothing
                 }
 
                 if (m_cs.m_box.is_empty()) {
                     DREAL_LOG_INFO << "icp_mcts_simulator::simulate() setting dimension ub = " << i;
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << prev;
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() before\n" << prev;
                     m_cs.m_box = prev.set_dimension_ub(i);
-                    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
-
+                    // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() after\n" << m_cs.m_box;
+                    delete last_non_empty_box;
+                    last_non_empty_box = new box(m_cs.m_box);
                     try {
-                        DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
+                        // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() start pruning";
                         m_ctc.prune(m_cs);
-                        DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
+                        // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() done pruning";
                     } catch (contractor_exception & e) {
                         // Do nothing
                     }
@@ -148,8 +152,8 @@ double icp_mcts_expander::simulate(mcts_node * node) {
             simulation_steps++;
         }
         if (m_cs.m_box.is_point()) {
-            std::cout << "found sat" << std::endl;
-            DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found sat";
+            // std::cout << "found sat" << std::endl;
+            // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found sat";
             icp_mcts_node * icp_node = NULL;
             if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
                 icp_node->add_sat_simulation_box(m_cs.m_box);
@@ -157,5 +161,19 @@ double icp_mcts_expander::simulate(mcts_node * node) {
             node->set_solution(true);
         }
     }
-    return (m_cs.m_box.is_empty() ? -1.0 / static_cast<double>(simulation_steps) : 1.0);
+    return (m_cs.m_box.is_empty() ? -1.0 * constraint_error(*last_non_empty_box) : 1.0);
+}
+
+double icp_mcts_expander::constraint_error(box b) const {
+    DREAL_LOG_INFO << "icp_mcts_expander::constraint_error(box)";
+    double error = 0.0;
+    nonlinear_constraint * nc = NULL;
+    for (auto ctr : m_ctrs) {
+        if ((nc = dynamic_cast<nonlinear_constraint *>(ctr.get()))) {
+            DREAL_LOG_INFO << "icp_mcts_expander::constraint_error(box) ctr = " << *nc;
+            error += nc->eval_error(b);
+        }
+    }
+    DREAL_LOG_INFO << "icp_mcts_expander::constraint_error(box) error = " << error;
+    return error;
 }

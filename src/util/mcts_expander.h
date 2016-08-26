@@ -49,6 +49,7 @@ public:
         : m_ctc(ctc), m_cs(cs), m_ctrs(ctrs), m_brancher(brancher) {}
     virtual void expand(mcts_node * node);
     virtual double simulate(mcts_node * node);
+    double constraint_error(box b) const;
 
 private:
     contractor & m_ctc;

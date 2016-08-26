@@ -525,7 +525,8 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
 
             if (last->is_solution()) {
                 cs.m_config.nra_found_soln++;
-                DREAL_LOG_INFO << "mcts_icp::solve() found solution";
+                DREAL_LOG_INFO << "mcts_icp::solve() found solution, used #nodes = "
+                               << root->size();
                 if (cs.m_config.nra_multiple_soln > 1) {
                     // If --multiple_soln is used
                     output_solution(cs.m_box, cs.m_config, cs.m_config.nra_found_soln);

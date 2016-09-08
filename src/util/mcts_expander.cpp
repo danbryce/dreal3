@@ -238,6 +238,7 @@ double icp_mcts_expander::constraint_error(box b) const {
         if ((nc = dynamic_cast<nonlinear_constraint *>(ctr.get()))) {
 	  //DREAL_LOG_INFO << "icp_mcts_expander::constraint_error(box) ctr = " << *nc;
             error += nc->eval_error(b);
+	  }
         }
     }
     DREAL_LOG_INFO << "icp_mcts_expander::constraint_error(box) error = " << error;

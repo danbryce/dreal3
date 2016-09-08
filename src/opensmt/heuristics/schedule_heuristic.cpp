@@ -241,7 +241,6 @@ void schedule_heuristic::inform(Enode * e) {
 	  DREAL_LOG_INFO << "index = " << (*at).second;
 	  (*at_time_enodes[time])[(*at).second] = e;
 	  at_enodes.insert(e);
-	  
 	  DREAL_LOG_INFO << "Got = " << (*at_time_enodes[time])[(*at).second];
 	  
 	}
@@ -319,31 +318,33 @@ void schedule_heuristic::inform(Enode * e) {
     }
 
     DREAL_LOG_DEBUG << "schedule_heuristic::backtrack()";
+    lastTrailEnd = trail->size();
+    DREAL_LOG_DEBUG << "schedule_heuristic::backtrack() lastTrailEnd = " << lastTrailEnd;
+
     for(auto a : m_suggestions) {
       delete a;
     }
     m_suggestions.clear();
     backtracked = true;
 
-    lastTrailEnd = trail->size();
     displayTrail();
     displayStack();
 
-    int bt_point = (trail_lim->size() == 0 ?
-                    0 : (m_stack_lim.size() <= (unsigned int) trail_lim->size() ?
-                         m_stack.size() :
-                          m_stack_lim[trail_lim->size()]-1));
+    int bt_point = (((unsigned long)trail_lim->size() < m_stack_lim.size()  //&& trail_lim->size() > 0
+          )
+             ? m_stack_lim[trail_lim->size()]
+             : m_stack.size());
     DREAL_LOG_DEBUG << "level = " << trail_lim->size() << " pt = " << bt_point;
 
-    while(m_stack_lim.size() > (unsigned int) trail_lim->size() && !m_stack_lim.empty())
+    while(m_stack_lim.size() > (unsigned int) trail_lim->size())
       m_stack_lim.pop_back();
 
-    for (int i = m_stack.size(); i > bt_point+1; i--) {
+    for (int i = m_stack.size(); i > bt_point; i--) {
       std::pair<Enode *, bool> *s = m_stack.back();
       m_stack.pop_back();
       stack_literals.erase(s->first);
       delete s;
-      lastTrailEnd--;
+      // lastTrailEnd--;
     }
  displayStack();
 
@@ -372,7 +373,10 @@ void schedule_heuristic::inform(Enode * e) {
   void schedule_heuristic::pushTrailOnStack() {
     DREAL_LOG_INFO << "schedule_heuristic::pushTrailOnStack() lastTrailEnd = "
                    << lastTrailEnd << " trail->size() = " << trail->size();
-    if((unsigned int) trail_lim->size() > m_stack_lim.size() ) //track start of levels after the first level
+     displayTrail();
+     if((unsigned int) trail_lim->size() > m_stack_lim.size() //&&
+        //m_stack.size() > 0
+	) //track start of levels after the first level
       m_stack_lim.push_back(m_stack.size());
 
     for (int i = lastTrailEnd; i < trail->size(); i++) {
@@ -407,17 +411,21 @@ void schedule_heuristic::inform(Enode * e) {
 
   void schedule_heuristic::completeSuggestionsForTrail() {
     DREAL_LOG_INFO << "schedule_heuristic::completeSuggestionsForTrail()";
-    for(unsigned int i = 0; i < m_decision_stack.size(); i++) {
-      pair<Enode*, vector<int>*>* decision = m_decision_stack[i];
-      if(decision->first != NULL) {
-	if(decision->second->back()){
-	  DREAL_LOG_DEBUG << "Suggesting: " << decision->first;
+    for( int i = m_decision_stack.size()-1; i >= 0; i--) {
+      schedule_decision* decision = m_decision_stack[i];
+      DREAL_LOG_DEBUG << "Suggesting: " << decision->first << " " << decision->second->back();
+      for(int time = 0; time <= m_depth; time++){
+	Enode* decision_enode = (*at_time_enodes[time])[decision->first];
+	DREAL_LOG_DEBUG << "Suggesting: " << decision_enode << " = " << (time == decision->second->back());
+	if (time == decision->second->back()){
+	  m_suggestions.push_back(new std::pair<Enode *, bool>(decision_enode, true));
+	} else {
+	  m_suggestions.push_back(new std::pair<Enode *, bool>(decision_enode, false));
 	}
-        m_suggestions.push_back(new std::pair<Enode *, int>(decision->first, decision->second->back()));
-      }
+      }      
     }
 
-
+    DREAL_LOG_INFO << "schedule_heuristic::completeSuggestionsForTrail()";
     // for (int time = m_depth; time >= 0; time--) {
     //   DREAL_LOG_INFO << "schedule_heuristic::completeSuggestionsForTrail() time = " << time;
     //   // // suggest processes
@@ -466,6 +474,38 @@ void schedule_heuristic::inform(Enode * e) {
     //   }
     // }
   }
+  
+std::pair<Enode*, bool>* schedule_heuristic::on_stack(Enode* act) {
+
+  auto e = stack_literals.find(act);
+  if (e != stack_literals.end()) {
+  for (auto d : m_stack) {
+    if (act == d->first){
+      return d;
+    }
+  }
+  }
+  return NULL;
+}
+    
+  std::vector<int>* schedule_heuristic::get_possible_decisions(int act) {
+  std::vector<int>* decisions = new vector<int>();
+  for (int i = 0; i <= m_depth; i++) {
+    Enode* act_at_step = (*at_time_enodes[i])[act];
+    pair<Enode*, bool>* on = on_stack(act_at_step);
+    if (on == NULL) { //no decisions for act on stack
+      decisions->push_back(i);
+      DREAL_LOG_DEBUG << "depth = " << i << " enode = " << act_at_step;
+    } else if (on->second == true) { //already assigned
+      decisions->clear();
+      decisions->push_back(i);
+      DREAL_LOG_DEBUG << "only depth = " << i << " enode = " << act_at_step;
+      break;
+    } else { // assigned false
+    }
+  }
+  return decisions;
+}
 
 
 // Assume that m_decision_stack matches m_stack
@@ -474,6 +514,8 @@ bool schedule_heuristic::expand_path(bool first_expansion) {
     DREAL_LOG_INFO << "schedule_heuristic::expand_path()" << endl;
     DREAL_LOG_INFO << "[" << num_choices_per_happening << " " << m_depth << " " << m_decision_stack.size() << "]";
 
+    displayDecisions();
+    
     // cannot expand path if out of choices
     if (m_decision_stack.size() == 0 && !first_expansion){
       DREAL_LOG_INFO << "out of choices";
@@ -490,32 +532,41 @@ bool schedule_heuristic::expand_path(bool first_expansion) {
     DREAL_LOG_INFO << "Adding #steps: " << steps_to_add << endl;
     for (int i = 0; i < steps_to_add; i++){
       int act = (static_cast<int>(m_decision_stack.size()));
-      vector<int> *current_decision = new vector<int>();
-      // DREAL_LOG_INFO << "step = " << step << " act = " << act;
-      //      Enode* current_enode = (*at_time_enodes[step])[act];
       DREAL_LOG_DEBUG << "Adding decisions for act id " << act;
+      vector<int> *current_decision = get_possible_decisions(act);
 
-      bool found_existing_value = false;
-      // prune out choices that are negated in m_stack
-      for (auto e : m_stack) {
-	auto a = at_nodes.find(e);
-	if(a != at_nodes.end()){
-	  
-	}
-	
-	if(e->first == current_enode) {
-	  current_decision->push_back(e->second);
-	  found_existing_value = true;
-	  break;
-	}
+      for(auto d : *current_decision) {
+	DREAL_LOG_DEBUG << "Decision: " << d;
       }
 
       
+      // DREAL_LOG_INFO << "step = " << step << " act = " << act;
+      //      Enode* current_enode = (*at_time_enodes[step])[act];
+
       
-      if(!found_existing_value) {
-	current_decision->push_back(false);
-	current_decision->push_back(true);
-      } 
+      
+      // bool found_existing_value = false;
+      // // prune out choices that are negated in m_stack
+      // for (auto e : m_stack) {
+      // 	auto a = at_enodes.find(e);
+      // 	if(a != at_enodes.end()){
+      // 	  // is an at literal
+	  
+      // 	}
+	
+      // 	if(e->first == current_enode) {
+      // 	  current_decision->push_back(e->second);
+      // 	  found_existing_value = true;
+      // 	  break;
+      // 	}
+      // }
+
+      
+      
+      // if(!found_existing_value) {
+      // 	current_decision->push_back(false);
+      // 	current_decision->push_back(true);
+      // } 
 
         // // remove choices that are too costly for time
         // for (auto c : *current_decision)  {
@@ -532,13 +583,13 @@ bool schedule_heuristic::expand_path(bool first_expansion) {
         // current_decision->insert(current_decision->begin(), current_decision_copy.begin(), current_decision_copy.end());
 
         if (current_decision->size() == 0) {
-            DREAL_LOG_INFO << "No decisions left at time " << step << endl;
+            DREAL_LOG_INFO << "No decisions left at time " << act << endl;
             return false;
         }
 
         //    sort (current_decision->begin(), current_decision->end(), SubgoalCompare(autom, *this));
 
-        m_decision_stack.push_back(new pair<Enode*, vector<bool>*>(current_enode, current_decision));
+        m_decision_stack.push_back(new schedule_decision(act, current_decision));
 
         // for (auto d : *current_decision) {
         //     DREAL_LOG_INFO << "dec = " << d << endl;
@@ -549,7 +600,7 @@ bool schedule_heuristic::expand_path(bool first_expansion) {
       
 
     return static_cast<int>(m_decision_stack.size()) ==
-      num_choices_per_happening*(m_depth); // successfully found a full path
+      num_choices_per_happening; // successfully found a full path
 }
 
   // undo choices on m_decision_stack until earliest violated decision
@@ -571,18 +622,22 @@ bool schedule_heuristic::unwind_path() {
   //   }
 
   //int earliest_disagreement = m_decision_stack.size();
+  DREAL_LOG_INFO << "schedule_heuristic::unwind_path()";
   bool need_bt_to_decision = false;
-  for(int i = m_decision_stack.size()-1; i >= 0; i--) {
-    pair<Enode*, vector<bool>*> *decision = m_decision_stack[i];
+  for(int i = 0 ; i < m_decision_stack.size(); i++) {
+    schedule_decision *decision = m_decision_stack[i];
+    Enode* decision_enode = (*at_time_enodes[decision->second->back()])[decision->first];
+    DREAL_LOG_INFO << "schedule_heuristic::unwind_path() " << decision_enode << " at " << i;
 
     // bool found_decision = false;
-    for(int j = m_stack.size()-1; j >= 0; j--) {
+    for(int j = 0; j < m_stack.size(); j++) {
       pair<Enode*, bool>* sdecision = m_stack[j];
-      if(decision->first == sdecision->first) {
+      if(decision_enode == sdecision->first) {
         // found_decision = true;
 
         //decision disagrees w/ m_stack
-        if(sdecision->second != decision->second->back()) {
+        if(!sdecision->second) {
+	  DREAL_LOG_INFO << "schedule_heuristic::unwind_path() " << decision_enode << " is false";
           //found possibly earliest disagreement, clear decision stack to this point
           for(int k = m_decision_stack.size()-1; k > i; k--) {
             delete m_decision_stack[k]->second;
@@ -737,15 +792,24 @@ bool schedule_heuristic::unwind_path() {
 }
 
   bool schedule_heuristic::pbacktrack() {
+    DREAL_LOG_INFO << "schedule_heuristic::pbacktrack()";
 
-    for(int i = m_decision_stack.size()-1; i >= 0; i--) {
-      pair<Enode*, vector<bool>*> *decision = m_decision_stack[i];
+    bool found_sibling = false;
+    DREAL_LOG_INFO << "Starting backtrack from level " << m_decision_stack.size()
+                   << " lastDecisionStackEnd = " << lastDecisionStackEnd << endl;
+
+    while (!found_sibling && m_decision_stack.size() > 0 &&
+           m_decision_stack.size() > (unsigned long)lastDecisionStackEnd) {
+        DREAL_LOG_INFO << "Backtracking at level " << m_decision_stack.size() << endl;
+    
+	schedule_decision *decision = m_decision_stack.back();
       if(decision->second->size() <= 1) {
-        delete m_decision_stack[i]->second;
-        delete m_decision_stack[i];
+        delete decision->second;
+        delete decision;
         m_decision_stack.pop_back();
       } else  {
-        m_decision_stack[i]->second->pop_back();
+        decision->second->pop_back();
+	found_sibling = true;
         break;
       }
     }
@@ -777,7 +841,7 @@ bool schedule_heuristic::unwind_path() {
     //   time > (m_depth+1)-m_decision_stack.size(); time--)  {
     //   DREAL_LOG_DEBUG << "Stack(" << time << ") =" << m_decision_stack[i++]->second->back();
     // }
-    return m_decision_stack.size() > 0;
+    return m_decision_stack.size() > (unsigned long)lastDecisionStackEnd;
   }
 
 
@@ -785,7 +849,7 @@ bool schedule_heuristic::unwind_path() {
   bool schedule_heuristic::getSuggestions()  {
     DREAL_LOG_INFO << "schedule_heuristic::getSuggestions()";
     //displayTrail();
- 
+    
     bool suggestion_consistent = isStackConsistentWithSuggestion();
 
     m_is_initialized = true;
@@ -813,7 +877,7 @@ bool schedule_heuristic::unwind_path() {
   if (m_config->nra_use_stat) { m_config->nra_stat.increase_heuristic_paths(); }
 
   if (m_decision_stack.size() <= (unsigned long)lastDecisionStackEnd &&
-      m_decision_stack.size() < (unsigned long)(m_depth+1)*num_choices_per_happening){
+      m_decision_stack.size() < (unsigned long)num_choices_per_happening){
     DREAL_LOG_INFO << "Ran out of suggestions, subtree is unsat!";
     //generate conflict clause
     return false;
@@ -871,5 +935,19 @@ bool schedule_heuristic::unwind_path() {
       //                   << endl;
       //  }
     return true;
+}
+
+void schedule_heuristic::displayDecisions(){
+  DREAL_LOG_INFO << "Decision Stack:";
+  stringstream s;
+  for(auto d : m_decision_stack){
+    s << d << ": [";
+    for(auto v : *d->second){
+      s <<  v << " ";
+    }
+    s << "]" << endl;
+  }
+  DREAL_LOG_INFO << s.str();
+  
 }
 }

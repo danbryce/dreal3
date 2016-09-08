@@ -32,6 +32,9 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <utility>
 
 namespace dreal {
+
+typedef std::pair<int, std::vector<int>*> schedule_decision;
+  
 class schedule_heuristic : public heuristic {
 public:
  schedule_heuristic() : heuristic(), choice_index(0), first_path(true), num_acts(0) {}
@@ -55,13 +58,16 @@ private:
     bool unwind_path();
     bool pbacktrack();
     bool expand_path(bool first_expansion);
+    void displayDecisions();
 
     int num_acts;
-    std::map<std::string, int> at_id;
+    std::map<std::string, int> at_id; //not used
     std::vector<std::vector<Enode*>*> at_time_enodes;
     std::set<Enode*> at_enodes;
-    
-    std::vector<std::pair<std::string, std::vector<int>*>*> m_decision_stack;
+    std::vector<int>* get_possible_decisions(int act);
+    std::pair<Enode*, bool>* on_stack(Enode* act);
+        
+    std::vector<schedule_decision*> m_decision_stack;
 
     std::set< Enode * > m_atoms;
     int num_choices_per_happening;

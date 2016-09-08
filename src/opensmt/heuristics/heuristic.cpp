@@ -165,7 +165,9 @@ void heuristic::pushTrailOnStack() {}
 
 bool heuristic::isStackConsistentWithSuggestion() {
     // return true if no suggestion is inconsistent with the stack
+  DREAL_LOG_INFO << "heuristic::isStackConsistentWithSuggestion()";
     for (auto sug : m_suggestions) {
+      DREAL_LOG_INFO << "heuristic::isStackConsistentWithSuggestion() check " << sug->first << " " << sug->second;
         for (auto sta : m_stack) {
             if (sug->first == sta->first && sug->second != sta->second) {
                 DREAL_LOG_DEBUG << "Stack and Suggestion Inconsistent: " << sug->first << " = "

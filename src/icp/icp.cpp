@@ -538,7 +538,14 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
             }
         } else {
             DREAL_LOG_INFO << "mcts_icp::solve() end state";
+	    
+	    
             last = current;
+
+	    if(last->is_solution()){
+	      last->simulate();
+	    }
+	    
         }
 
         // DREAL_LOG_INFO << "mcts_icp::solve() backpropagate";

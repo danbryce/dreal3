@@ -37,7 +37,7 @@ struct mcts_node_compare {
     bool operator()(const mcts_node * a, const mcts_node * b) { return &a < &b; }
 };
 
-static const double UCT_COEFFICIENT = 0.5;
+static const double UCT_COEFFICIENT = 0.1;
 static int id_counter = 0;
 
 class mcts_node {

@@ -90,7 +90,7 @@ void icp_mcts_expander::expand(mcts_node * node) {
                                                 << endl;
                 }
             } else {
-	      std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
+	      //std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
                 icp_node->set_solution(true);
             }
         }

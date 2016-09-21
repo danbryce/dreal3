@@ -47,8 +47,8 @@ namespace dreal {
     m_config = &c;
     m_is_initialized = true;
 
-    m_depth = 2;
-    num_choices_per_happening = 4; //num actions * 2
+    m_depth = 10;
+    num_choices_per_happening = 20; //num actions * 2
 
     for(int i = 0; i < m_depth+1; i++){
       at_time_enodes.push_back(new vector<Enode*>(num_choices_per_happening, NULL));
@@ -490,7 +490,7 @@ std::pair<Enode*, bool>* schedule_heuristic::on_stack(Enode* act) {
     
   std::vector<int>* schedule_heuristic::get_possible_decisions(int act) {
   std::vector<int>* decisions = new vector<int>();
-  for (int i = 0; i <= m_depth; i++) {
+  for (int i = m_depth-1; i >= 0; i--) {
     Enode* act_at_step = (*at_time_enodes[i])[act];
     pair<Enode*, bool>* on = on_stack(act_at_step);
     if (on == NULL) { //no decisions for act on stack

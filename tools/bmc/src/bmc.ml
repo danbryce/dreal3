@@ -661,7 +661,10 @@ let mk_gamma_t k aut mode =
         (mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k) ^ "_t"
 
 let mk_sync k label =
-        "sync_" ^ label ^ "_" ^ (string_of_int k)
+  "sync_" ^ label ^ "_" ^ (string_of_int k)
+
+let mk_aut_noop k aut =
+        "noop_aut" ^ (string_of_int (Hybrid.numid aut)) ^ "_" ^ (string_of_int k)
 
 let filter_aut_mode_distance aut k (heuristic : Costmap.t list option) (i : int) =
   let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap aut)) in
@@ -769,14 +772,24 @@ let mk_inv_q mode i =
     None -> Basic.True
   | Some fl -> begin
                let invs_mapped = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f) fl in
-               let conj_invs = Basic.make_and invs_mapped in
+               (* let conj_invs = Basic.make_and invs_mapped in
                match conj_invs with
                  Basic.True -> Basic.True
                | _ ->
                   Basic.ForallT (Basic.Num (float_of_int i),
                                  Basic.Num 0.0,
                                  Basic.Var time_var,
-                                 conj_invs)
+                                 conj_invs) *)
+	       let conj_invs = invs_mapped in
+               match List.length conj_invs == 0 with
+                 true -> Basic.True
+               | _ ->
+		  Basic.make_and (List.map (fun c ->
+                  Basic.ForallT (Basic.Num (float_of_int i),
+                                 Basic.Num 0.0,
+                                 Basic.Var time_var,
+                                 c)
+			   ) conj_invs)
              end
 
 let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) =
@@ -971,7 +984,8 @@ let trans_jump_sync aut j i =
         let ninter = List.filter (fun x -> not (List.mem x inter)) glab in
         let syncs = Basic.make_and (List.map (fun v -> Basic.FVar (mk_sync i v)) inter) in
         let nsyncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) ninter) in
-        Basic.make_and [syncs; nsyncs; jmp; enforcement]
+	let non_noop = Basic.Not (Basic.FVar (mk_aut_noop i aut)) in
+        Basic.make_and [syncs; nsyncs; non_noop; jmp; enforcement]
 
 let trans_jump_sync_noop aut i heuristic ia =
         let amodes = filter_aut_mode_distance aut i heuristic ia in
@@ -1002,14 +1016,21 @@ let mk_noop_global aut i =
   let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
   let change_unused =
     Basic.make_and (List.map (fun name ->
-			      Basic.Eq (Basic.Var (mk_variable i "_t" name), Basic.Var (mk_variable (i+1) "_0" name))						
+			     Basic.Eq (Basic.Var (mk_variable i "_t" name), Basic.Var (mk_variable (i+1) "_0" name))			      
 			     )
 			     aut_vars
 		   ) in
   
   let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
   let enforce = Basic.Eq (Basic.Var (mk_enforce (i+1) aut), Basic.Var (mk_enforce i aut)) in
-  Basic.make_and [change_unused; syncs; enforce]
+  let explicit_enforce = Basic.make_or (List.map (fun key ->
+						  let mode = (Map.find key (Hybrid.modemap aut)) in
+						  let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId mode) in
+						  let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId mode) in
+						  Basic.make_and [enforce_org; enforce_des]
+						 ) (List.of_enum (Map.keys (Hybrid.modemap aut)))) in
+  let is_noop =  (Basic.FVar (mk_aut_noop i aut)) in
+  Basic.make_and [is_noop; change_unused; syncs; explicit_enforce]
 
 let trans n aut i k heuristic ia =
         let name = Hybrid.name aut in
@@ -1327,6 +1348,9 @@ let mk_label_must_happen (n: Network.t) (i: int) k (heuristic : Costmap.t list o
     true -> Basic.True 
   | _ -> Basic.make_or( List.map (fun x -> (Basic.FVar (mk_sync i x))) labels )
 
+let mk_non_noop_must_happen (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
+  Basic.make_or( List.map (fun aut -> (Basic.Not (Basic.FVar (mk_aut_noop i aut)))) n.automata )
+		      
 let mk_mode_pair_mutex (aut: Hybrid.t) (m: Mode.t) (m1: Mode.t) (i: int) =
   let nId = Mode.mode_numId m in
   let nId1 = Mode.mode_numId m1 in
@@ -1403,7 +1427,9 @@ let compile_logic_formula (h : Network.t)
                                                           (mk_active h x k heuristic);
                                                           (mk_maintain h x k heuristic);
                                                           (trans_network h x k heuristic);
-                                                          (mk_label_must_happen h x k heuristic)])
+                                                          (*(mk_label_must_happen h x k heuristic)*)
+							  (mk_non_noop_must_happen h x k heuristic)
+				   ])
                                 list_of_steps)
 
     | Some p -> Basic.make_and (List.map2 (fun q x -> Basic.make_and [(mk_mode_mutex h x k heuristic);
@@ -1542,7 +1568,8 @@ let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (heu
   let assert_enf = List.flatten assert_enf_list in
   let assert_gam = List.flatten assert_gam_list in
   let assert_gam_t = List.flatten assert_gam_list_t in
-  (org_vardecl_cmds@vardecl_cmds@syncs@enfdecl_cmds@gamma_plain@gamdecl_cmds(*@gamdecl_cmds_t*), [])
+  let noopdecl = List.flatten (List.map (fun aut -> List.map (fun i -> (DeclareBool (mk_aut_noop i aut))) (List.of_enum (0 -- (k-1)))) (Network.automata h)) in
+  (org_vardecl_cmds@vardecl_cmds@syncs@enfdecl_cmds@gamma_plain@gamdecl_cmds@noopdecl(*@gamdecl_cmds_t*), [])
 
 (** build list of ode definition **)
 let compile_ode_definition_pruned (h : Hybrid.t) k (relevant : Relevantvariables.t list option) =

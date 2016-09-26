@@ -32,6 +32,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include "util/box.h"
 #include <random>
 #include <chrono>
+#include <limits>
 #include "util/logging.h"
 #include "util/mcts_node.h"
 #include "util/stat.h"
@@ -76,13 +77,13 @@ void icp_mcts_expander::expand(mcts_node * node) {
                 assert(first.get_idx_last_branched() == i);
                 assert(second.get_idx_last_branched() == i);
 
-		if(!second.is_empty()){
-		  children->push_back(new icp_mcts_node(second, node, this));
-		}
-		if(!first.is_empty()){
-		  children->push_back(new icp_mcts_node(first, node, this));
-		}
-	
+                if (!second.is_empty()) {
+                    children->push_back(new icp_mcts_node(second, node, this));
+                }
+                if (!first.is_empty()) {
+                    children->push_back(new icp_mcts_node(first, node, this));
+                }
+
                 //      DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) split";
 
                 if (m_cs.m_config.nra_proof) {
@@ -90,7 +91,7 @@ void icp_mcts_expander::expand(mcts_node * node) {
                                                 << endl;
                 }
             } else {
-	      //std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
+                // std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
                 icp_node->set_solution(true);
             }
         }
@@ -211,23 +212,21 @@ double icp_mcts_expander::simulate(mcts_node * node) {
 		// }
 		//	}
             }
-            simulation_steps++;
-        }
-        if (m_cs.m_box.is_point()) {
-	  std::cout << "found sat" << std::endl;
-            // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found sat";
-            icp_mcts_node * icp_node = NULL;
-            if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
-                icp_node->add_sat_simulation_box(m_cs.m_box);
+            if (m_cs.m_box.is_point()) {
+                std::cout << "found sat" << std::endl;
+                // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found sat";
+                icp_mcts_node * icp_node = NULL;
+                if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
+                    icp_node->add_sat_simulation_box(m_cs.m_box);
+                }
+                node->set_solution(true);
             }
-            node->set_solution(true);
         }
+
+        average_score +=
+            (m_cs.m_box.is_empty() ? -1.0 * constraint_error(*last_non_empty_box) : 1.0);
     }
-    
-    average_score += (m_cs.m_box.is_empty() ? -1.0 * constraint_error(*last_non_empty_box)
-		      : 1.0);
-    }
-    return average_score/num_simulations;
+    return average_score / num_simulations;
 }
 
 double icp_mcts_expander::constraint_error(box b) const {

@@ -60,7 +60,6 @@ private:
     bool expand_path(bool first_expansion);
     void displayDecisions();
 
-    int num_acts;
     std::map<std::string, int> at_id; //not used
     std::vector<std::vector<Enode*>*> at_time_enodes;
     std::set<Enode*> at_enodes;
@@ -73,6 +72,7 @@ private:
     int num_choices_per_happening;
     int choice_index;
     bool first_path;
+    int num_acts;
 
     std::vector< std::vector<Enode*>* > time_act_enodes;
     std::vector<Enode*> choices;

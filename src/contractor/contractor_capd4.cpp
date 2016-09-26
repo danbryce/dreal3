@@ -530,20 +530,18 @@ bool filter_point(vector<pair<double, capd::DVector>> & trace, capd::IVector & X
                   capd::interval & T) {
     // 1) Intersect each v in enclosure with X_t.
     DREAL_LOG_DEBUG << "filter : enclosure.size = " << trace.size();
-    trace.erase(remove_if(trace.begin(), trace.end(),
-                          [&X_t](pair<double, capd::DVector> & item) {
-                              capd::DVector & v = item.second;
-                              // v = v union X_t
-                              DREAL_LOG_DEBUG << "before filter: " << v << "\t" << X_t;
-                              for (unsigned i = 0; i < X_t.dimension(); ++i) {
-                                  if (!X_t[i].contains(v[i])) {
-                                      return true;
-                                  }
-                              }
-                              DREAL_LOG_DEBUG << "after filter: " << v;
-                              return false;
-                          }),
-                trace.end());
+    trace.erase(remove_if(trace.begin(), trace.end(), [&X_t](pair<double, capd::DVector> & item) {
+                    capd::DVector & v = item.second;
+                    // v = v union X_t
+                    DREAL_LOG_DEBUG << "before filter: " << v << "\t" << X_t;
+                    for (unsigned i = 0; i < X_t.dimension(); ++i) {
+                        if (!X_t[i].contains(v[i])) {
+                            return true;
+                        }
+                    }
+                    DREAL_LOG_DEBUG << "after filter: " << v;
+                    return false;
+                }), trace.end());
     if (trace.empty()) {
         return false;
     }

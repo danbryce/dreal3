@@ -349,7 +349,8 @@ expr pow(double const a, expr const & e1) {
 
 expr operator^(expr const & e, double const a) { return pow(e, a); }
 
-expr operator^(double const a, expr const & e) { return pow(a, e); }
+expr
+operator^(double const a, expr const & e) { return pow(a, e); }
 
 expr pow(expr const & arg) {
     env cctx = arg.get_ctx();

@@ -204,7 +204,7 @@ ostream & display(ostream & out, box const & b, bool const exact, bool const old
                 out << ";";
             }
         }
-	out << endl;
+        out << endl;
     } else {
         unsigned const s = b.size();
         for (unsigned i = 0; i < s; i++) {

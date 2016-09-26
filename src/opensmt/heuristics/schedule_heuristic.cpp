@@ -624,13 +624,13 @@ bool schedule_heuristic::unwind_path() {
   //int earliest_disagreement = m_decision_stack.size();
   DREAL_LOG_INFO << "schedule_heuristic::unwind_path()";
   bool need_bt_to_decision = false;
-  for(int i = 0 ; i < m_decision_stack.size(); i++) {
+  for(unsigned int i = 0 ; i < m_decision_stack.size(); i++) {
     schedule_decision *decision = m_decision_stack[i];
     Enode* decision_enode = (*at_time_enodes[decision->second->back()])[decision->first];
     DREAL_LOG_INFO << "schedule_heuristic::unwind_path() " << decision_enode << " at " << i;
 
     // bool found_decision = false;
-    for(int j = 0; j < m_stack.size(); j++) {
+    for(unsigned int j = 0; j < m_stack.size(); j++) {
       pair<Enode*, bool>* sdecision = m_stack[j];
       if(decision_enode == sdecision->first) {
         // found_decision = true;
@@ -639,7 +639,7 @@ bool schedule_heuristic::unwind_path() {
         if(!sdecision->second) {
 	  DREAL_LOG_INFO << "schedule_heuristic::unwind_path() " << decision_enode << " is false";
           //found possibly earliest disagreement, clear decision stack to this point
-          for(int k = m_decision_stack.size()-1; k > i; k--) {
+          for(unsigned int k = m_decision_stack.size()-1; k > i; k--) {
             delete m_decision_stack[k]->second;
             delete m_decision_stack[k];
             m_decision_stack.pop_back();

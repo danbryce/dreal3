@@ -84,8 +84,7 @@ int main() {
 
     // Print information about the data held in the stack
     std::cout << "Stack status after numerical adjoint (if recording was successfully\n"
-              << "paused then the number of operations should be zero):\n"
-              << s;
+              << "paused then the number of operations should be zero):\n" << s;
     // Print memory information
     std::cout << "Memory usage: " << s.memory() << " bytes\n\n";
 

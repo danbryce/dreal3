@@ -122,6 +122,7 @@ public:
     std::vector<std::map< Enode *, std::pair<int, int>* >*> mode_literals;
     std::vector<std::vector< std::vector< Enode* >* >*> time_mode_enodes;
     std::vector<std::vector< std::vector< Enode* >* >*> time_mode_integral_enodes;
+    std::vector<std::vector<Enode*>* > time_aut_noop_enodes;
     std::vector<std::vector<Enode*>* > time_label_enodes;
     std::map<Enode*, int> label_enode_indices;
     std::vector<std::set<int>*> m_aut_labels;

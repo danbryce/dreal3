@@ -664,7 +664,7 @@ let mk_sync k label =
   "sync_" ^ label ^ "_" ^ (string_of_int k)
 
 let mk_aut_noop k aut =
-        "noop_aut" ^ (string_of_int (Hybrid.numid aut)) ^ "_" ^ (string_of_int k)
+        "noop_" ^ (string_of_int (Hybrid.numid aut)) ^ "_" ^ (string_of_int k)
 
 let filter_aut_mode_distance aut k (heuristic : Costmap.t list option) (i : int) =
   let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap aut)) in

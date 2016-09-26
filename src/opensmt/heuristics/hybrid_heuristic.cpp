@@ -200,7 +200,11 @@ void hybrid_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * tha
             vector<Enode *> * en = new vector<Enode *>();
             en->assign(num_labels, NULL);
             time_label_enodes.push_back(en);
-        }
+
+	    en = new vector<Enode *>();
+	    en->assign(num_autom, NULL);
+	    time_aut_noop_enodes.push_back(en);
+	}
 
         for (int a = 0; a < num_autom; a++) {
             mode_literals.push_back(new map<Enode *, pair<int, int> *>());
@@ -245,7 +249,14 @@ void hybrid_heuristic::inform(Enode * e) {
                 (*time_label_enodes[time])[label_index] = e;
                 label_enodes.insert(e);
                 label_enode_indices[e] = label_index;
-            }
+            } else if (var.find("noop") != string::npos) {
+	      int time_pos = var.rfind("_") + 1;
+	      int time = atoi(var.substr(time_pos).c_str());
+	      int aut = atoi(var.substr(5, time_pos - 1).c_str());
+	      DREAL_LOG_DEBUG << "Got noop " << e << " time = " << time
+                                << " aut = " << aut;
+	      (*time_aut_noop_enodes[time])[aut-1] = e;
+	    }
         }
     } else if (e->isEq() && !e->isNot()) {
         DREAL_LOG_INFO << "hybrid_heuristic::inform(): " << e << endl;
@@ -1322,6 +1333,7 @@ bool hybrid_heuristic::getSuggestions() {
         int mode = m_decision_stack[sl]->second->back()->second;
         set<int> * labels = m_decision_stack[sl]->second->back()->first;
         int autom = m_decision_stack[sl]->first;
+	bool trans_is_noop = is_noop(m_decision_stack[sl]->second->back());
 
         stringstream label_string;
         if (labels) {
@@ -1378,6 +1390,18 @@ bool hybrid_heuristic::getSuggestions() {
                 }
             }
         }
+
+	//suggest noop
+	if(time < m_depth){
+	Enode *noop_enode =(*time_aut_noop_enodes[time])[autom];
+	if(trans_is_noop) {
+	  DREAL_LOG_INFO << "Suggesting Noop: " << noop_enode;
+	  m_suggestions.push_back(new pair<Enode *, bool>(noop_enode, true));
+	} else {
+	   DREAL_LOG_INFO << "Suggesting Not Noop: " << noop_enode;
+	   m_suggestions.push_back(new pair<Enode *, bool>(noop_enode, false));
+	}
+	}
     }
 
     // // Suggest time 0 and time k mode literals

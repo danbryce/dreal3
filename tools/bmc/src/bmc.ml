@@ -769,7 +769,7 @@ let mk_inv_q mode i =
   let invs = mode.invs_op in
   let time_var = mk_variable i "" "time" in
   match invs with
-    None -> Basic.True
+    None -> []
   | Some fl -> begin
                let invs_mapped = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f) fl in
                (* let conj_invs = Basic.make_and invs_mapped in
@@ -782,14 +782,14 @@ let mk_inv_q mode i =
                                  conj_invs) *)
 	       let conj_invs = invs_mapped in
                match List.length conj_invs == 0 with
-                 true -> Basic.True
+                 true -> []
                | _ ->
-		  Basic.make_and (List.map (fun c ->
+		  List.map (fun c ->
                   Basic.ForallT (Basic.Num (float_of_int i),
                                  Basic.Num 0.0,
                                  Basic.Var time_var,
                                  c)
-			   ) conj_invs)
+			   ) conj_invs
              end
 
 let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) =
@@ -801,9 +801,9 @@ let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) =
                let modes = filter_aut_mode_distance a i heuristic ia in
                List.map (fun m ->
                          let inv_q = mk_inv_q m i in
-                         match inv_q  with
-                           Basic.True -> Basic.True
-                         | _ -> Basic.Imply (mk_cnd (mk_enforce i a) (Mode.mode_numId m), inv_q))
+                         match (List.length inv_q) == 0  with
+                           true -> Basic.True
+                         | _ -> Basic.make_and (List.map (fun inv -> Basic.Imply (mk_cnd (mk_enforce i a) (Mode.mode_numId m), inv)) inv_q))
                         modes
              end) auta
         in

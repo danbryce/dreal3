@@ -1011,7 +1011,7 @@ let mk_noop aut mode =
         let change = Basic.make_and (List.map (fun v -> Basic.Eq (Basic.Var (v ^ "'"), Basic.Var v)) aut_vars) in
         Jump.make (True, Mode.mode_id mode, change, [])
 
-let mk_noop_global aut i =
+let mk_noop_global aut i heuristic ia =
   let glab = Hybrid.labellist aut in
   let aut_vars = List.map (fun (var, _) -> var) (Map.bindings (Hybrid.vardeclmap aut)) in
   let change_unused =
@@ -1023,12 +1023,13 @@ let mk_noop_global aut i =
   
   let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
   let enforce = Basic.Eq (Basic.Var (mk_enforce (i+1) aut), Basic.Var (mk_enforce i aut)) in
+  let modes = List.map (fun m -> Mode.mode_id m) (filter_aut_mode_distance aut i heuristic ia) in
   let explicit_enforce = Basic.make_or (List.map (fun key ->
 						  let mode = (Map.find key (Hybrid.modemap aut)) in
 						  let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId mode) in
 						  let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId mode) in
 						  Basic.make_and [enforce_org; enforce_des]
-						 ) (List.of_enum (Map.keys (Hybrid.modemap aut)))) in
+						 ) modes) in
   let is_noop =  (Basic.FVar (mk_aut_noop i aut)) in
   Basic.make_and [is_noop; change_unused; syncs; explicit_enforce]
 
@@ -1190,12 +1191,12 @@ let get_unlabeled_jumps jmplist =
 
 let trans_network n i k heuristic =
         let automata = Network.automata n in
-        let jumplst = List.mapi (fun ia a -> (a, trans n a i k heuristic ia, trans_jump_sync_noop a i heuristic ia)) automata in
-        let ax = List.map (fun (a, jlist, nooplist) ->
+        let jumplst = List.mapi (fun ia a -> (ia, a, trans n a i k heuristic ia, trans_jump_sync_noop a i heuristic ia)) automata in
+        let ax = List.map (fun (ia, a, jlist, nooplist) ->
                 begin
                   let jmpor = Basic.make_or (List.map (fun j -> trans_jump_sync a j i) jlist) in
                   let noopr = Basic.make_or nooplist in
-                  Basic.make_or [jmpor;mk_noop_global a i] (*[noopr; jmpor]*)
+                  Basic.make_or [jmpor;mk_noop_global a i heuristic ia] (*[noopr; jmpor]*)
                 end
         )
         jumplst in
@@ -1423,7 +1424,7 @@ let compile_logic_formula (h : Network.t)
 				 let () = Basic.print_formula IO.stdout (mk_label_must_happen h x k heuristic) in
 				 let () = print_endline "" in
  *)	
-				 Basic.make_and [(*(mk_mode_mutex h x k heuristic);*)
+				 Basic.make_and [(mk_mode_mutex h x k heuristic);
                                                           (mk_active h x k heuristic);
                                                           (mk_maintain h x k heuristic);
                                                           (trans_network h x k heuristic);
@@ -1438,7 +1439,7 @@ let compile_logic_formula (h : Network.t)
                                           (List.take k p)
                                           list_of_steps)
     in
-    let goal_clause = Basic.make_and [(mk_goal_network h k heuristic) (*;(mk_mode_mutex h k k heuristic)*)] in
+    let goal_clause = Basic.make_and [(mk_goal_network h k heuristic) ;(mk_mode_mutex h k k heuristic)] in
     let end_step = Basic.make_and [(mk_active h k k heuristic); (mk_maintain h k k heuristic)] in
   [(Assert init_clause); (Assert steps); (Assert end_step); (Assert goal_clause)]
 

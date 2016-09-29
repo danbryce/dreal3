@@ -256,6 +256,7 @@ void hybrid_heuristic::inform(Enode * e) {
 	      DREAL_LOG_DEBUG << "Got noop " << e << " time = " << time
                                 << " aut = " << aut;
 	      (*time_aut_noop_enodes[time])[aut-1] = e;
+	      noop_enodes.insert(e);
 	    }
         }
     } else if (e->isEq() && !e->isNot()) {
@@ -1189,7 +1190,11 @@ void hybrid_heuristic::pushTrailOnStack() {
             DREAL_LOG_INFO << "hybrid_heuristic::pushTrailOnStack() " << e << " " << msign;
             m_stack.push_back(new std::pair<Enode *, bool>(e, msign));
             stack_literals.insert(e);
-        }
+        } else if (noop_enodes.find(e) != noop_enodes.end()) {
+            DREAL_LOG_INFO << "hybrid_heuristic::pushTrailOnStack() " << e << " " << msign;
+            m_stack.push_back(new std::pair<Enode *, bool>(e, msign));
+            stack_literals.insert(e);
+        } 
     }
     lastTrailEnd = trail->size();
     // displayTrail();

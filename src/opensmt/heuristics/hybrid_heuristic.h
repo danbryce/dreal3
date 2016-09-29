@@ -129,6 +129,7 @@ public:
 
     std::set<Enode*> mode_enodes;
     std::set<Enode*> label_enodes;
+    std::set<Enode*> noop_enodes;
     std::set<const labeled_transition*> noops;
     Egraph * m_egraph;
     // std::vector<int> * last_decision;

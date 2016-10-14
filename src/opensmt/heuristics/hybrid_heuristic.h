@@ -79,7 +79,7 @@ public:
         delete t;
       }
     }
-  void initialize(SMTConfig & c, Egraph & egraph, THandler* thandler,
+  bool initialize(SMTConfig & c, Egraph & egraph, THandler* thandler,
                   vec<Lit> *trail, vec<int> *trail_lim);
   void backtrack();
     void resetSuggestions() { m_suggestions.clear(); }
@@ -144,7 +144,7 @@ public:
     std::string network_to_string();
 public:
     struct SubgoalCompare {
-    SubgoalCompare(int a, hybrid_heuristic& c) : myHeuristic(c), autom(a) { srand(time(NULL));}
+    SubgoalCompare(int a, hybrid_heuristic& c) : myHeuristic(c), autom(a) { }
         bool operator () (const labeled_transition  *i, const labeled_transition *j) {
     bool noopi = myHeuristic.noops.find(i) != myHeuristic.noops.end();
     bool noopj = myHeuristic.noops.find(j) != myHeuristic.noops.end();

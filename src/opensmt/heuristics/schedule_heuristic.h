@@ -38,7 +38,7 @@ typedef std::pair<int, std::vector<int>*> schedule_decision;
 class schedule_heuristic : public heuristic {
 public:
  schedule_heuristic() : heuristic(), choice_index(0), first_path(true), num_acts(0) {}
-    void initialize(SMTConfig &, Egraph &, THandler* thandler, vec<Lit> *trail, vec<int> *trail_lim);
+    bool initialize(SMTConfig &, Egraph &, THandler* thandler, vec<Lit> *trail, vec<int> *trail_lim);
     ~schedule_heuristic() {
     }
 

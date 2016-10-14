@@ -153,9 +153,10 @@ public:
         // Added Code
         //=================================================================================================
 
-  // Heuristics
-  dreal::heuristic *heuristic;
-
+	// Heuristics
+	dreal::heuristic *heuristic;
+	bool heuristic_shows_not_unsat;  //if false, then heuristic proves unsat and can quit early.
+	bool get_heuristic_shows_not_unsat() const { return heuristic_shows_not_unsat; }
         // Extra results: (read-only member variable)
         //
         vec<lbool> model;             // If problem is satisfiable, this vector contains the model (if any).

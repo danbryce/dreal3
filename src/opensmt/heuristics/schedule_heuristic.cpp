@@ -38,7 +38,7 @@ namespace dreal {
   extern string get_file_contents(const char* filename);
   extern int get_mode(Enode* e);
 
-  void schedule_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler* thandler, vec<Lit> *trl, vec<int> *trl_lim)  {
+  bool schedule_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler* thandler, vec<Lit> *trl, vec<int> *trl_lim)  {
     DREAL_LOG_INFO << "schedule_heuristic::initialize() " << (thandler == NULL);
     m_egraph = &egraph;
     theory_handler = thandler;
@@ -116,6 +116,7 @@ namespace dreal {
     //     // first_decision->push_back(false);
     //     // m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
     // }
+    return true;
 }
 
 void schedule_heuristic::inform(Enode * e) {

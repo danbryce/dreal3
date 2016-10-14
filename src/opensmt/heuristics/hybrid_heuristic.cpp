@@ -70,7 +70,7 @@ int get_mode(Enode * lit) {
     return -1;
 }
 
-void hybrid_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * thandler,
+bool hybrid_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * thandler,
                                   vec<Lit> * trl, vec<int> * trl_lim) {
     DREAL_LOG_DEBUG << "hybrid_heuristic::initialize()";
     m_egraph = &egraph;
@@ -225,6 +225,25 @@ void hybrid_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * tha
             }
         }
     }
+
+    bool found_path = false;
+    bool path_possible = true;
+    bool first_expansion = true;
+    lastDecisionStackEnd = m_decision_stack.size();
+   while (!found_path && path_possible) {
+        if (path_possible) {
+	  //cout << "expand" << endl;
+            found_path = expand_path(first_expansion);
+            first_expansion = false;
+        }
+        if (!found_path) {
+	  //	  cout << "bt" << endl;
+            path_possible = pbacktrack();
+        }
+    }
+    
+   return path_possible;
+
     //    DREAL_LOG_DEBUG << network_to_string();
 }
 
@@ -267,7 +286,7 @@ void hybrid_heuristic::inform(Enode * e) {
             stringstream ss;
             ss << v;
             string var = ss.str();
-            if (var.find("mode") != string::npos) {
+            if (var.find("mode") == 0) {
                 int autom_pos = var.find("_") + 1;
                 int time_pos = var.rfind("_") + 1;
                 int time = atoi(var.substr(time_pos).c_str());
@@ -695,10 +714,10 @@ bool hybrid_heuristic::expand_path(bool first_expansion) {
                 stringstream labels;
                 if (d->first) {
                     for (auto lab : *(d->first)) {
-                        labels << lab;
+		      labels << lab << " ";
                     }
                 }
-                DREAL_LOG_INFO << "dec = " << d->second << " [" << labels.str() << "]";
+                DREAL_LOG_INFO << "dec = " << d->second << " [" << labels.str() << "] " << (is_noop(d) ? "noop" : "");
             }
         }
 
@@ -1233,7 +1252,7 @@ bool hybrid_heuristic::getSuggestions() {
 
     lastDecisionStackEnd = m_decision_stack.size();
 
-    bool first_expansion = true;
+    bool first_expansion = false;
     while (!found_path && path_possible) {
         if (path_possible) {
             found_path = expand_path(first_expansion);
@@ -1397,8 +1416,8 @@ bool hybrid_heuristic::getSuggestions() {
         }
 
 	//suggest noop
-	if(time < m_depth){
-	Enode *noop_enode =(*time_aut_noop_enodes[time])[autom];
+	if(time > 0 && time < m_depth){
+	Enode *noop_enode =(*time_aut_noop_enodes[time-1])[autom];
 	if(trans_is_noop) {
 	  DREAL_LOG_INFO << "Suggesting Noop: " << noop_enode;
 	  m_suggestions.push_back(new pair<Enode *, bool>(noop_enode, true));

@@ -232,6 +232,16 @@ int OpenSMTContext::executeIncremental( )
   assert( init );
   assert( config.incremental == 1 );
 
+  // Check whether initializing the heuristic results in UNSAT
+  if ( !solver.get_heuristic_shows_not_unsat() ) {
+    ostream & out = config.getRegularOut( );
+    out << "unsat" << endl;
+    if (config.nra_use_stat) {
+        out << config.nra_stat << endl;
+    }
+    return 0;
+  }
+  
   // Initialize theory solvers
   egraph.initializeTheorySolvers( &solver );
 

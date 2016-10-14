@@ -125,6 +125,7 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
   , elim_tvars            (0)
 #endif
   , init                  (false)
+  , heuristic_shows_not_unsat (true)
 {
 
   if(c.nra_plan_heuristic.compare("") != 0){

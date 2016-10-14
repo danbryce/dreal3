@@ -49,7 +49,7 @@ namespace dreal {
 extern string get_file_contents(const char * filename);
 extern int get_mode(Enode * e);
 
-void plan_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * thandler, vec<Lit> * trl,
+bool plan_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * thandler, vec<Lit> * trl,
                                 vec<int> * trl_lim) {
     DREAL_LOG_INFO << "plan_heuristic::initialize() " << (thandler == NULL);
     m_egraph = &egraph;
@@ -119,6 +119,7 @@ void plan_heuristic::initialize(SMTConfig & c, Egraph & egraph, THandler * thand
         // first_decision->push_back(false);
         // m_decision_stack.push_back(new pair<Enode*, vector<bool>*>( ,first_decision));
     }
+    return true;
 }
 
 void plan_heuristic::inform(Enode * e) {

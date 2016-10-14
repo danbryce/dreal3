@@ -49,8 +49,9 @@ using std::sort;
 namespace dreal {
 heuristic::~heuristic() {}
 
-void heuristic::initialize(SMTConfig & config, Egraph &, THandler *, vec<Lit> *, vec<int> *) {
+bool heuristic::initialize(SMTConfig & config, Egraph &, THandler *, vec<Lit> *, vec<int> *) {
     m_config = &config;
+    return true;
 }
 
 void heuristic::inform(Enode *) {}

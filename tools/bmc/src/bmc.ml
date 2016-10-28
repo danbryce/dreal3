@@ -651,6 +651,10 @@ let mk_enforce k aut =
 let mk_cnd term c =
         Basic.Eq (Basic.Var (term), Basic.Num (float_of_int c))
 
+let mk_enforce_cnd k aut mode =
+  "mode_" ^ (string_of_int (Hybrid.numid aut))  ^ "_" ^ (string_of_int k)  ^  "_" ^ (string_of_int (Mode.mode_numId mode)) ^ "_" ^ (Mode.mode_id mode)
+
+		 
 let mk_gamma_nt aut mode =
         "gamma_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int (Mode.mode_numId mode))
 
@@ -803,7 +807,7 @@ let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) =
                          let inv_q = mk_inv_q m i in
                          match (List.length inv_q) == 0  with
                            true -> Basic.True
-                         | _ -> Basic.make_and (List.map (fun inv -> Basic.Imply (mk_cnd (mk_enforce i a) (Mode.mode_numId m), inv)) inv_q))
+                         | _ -> Basic.make_and (List.map (fun inv -> Basic.Imply (* (mk_cnd (mk_enforce i a) (Mode.mode_numId m)) *) (Basic.FVar (mk_enforce_cnd i a m), inv)) inv_q))
                         modes
              end) auta
         in
@@ -829,7 +833,7 @@ let mk_init aut =
         in
         let form = Hybrid.init_formula aut in
         let from_mapped = Basic.subst_formula (mk_variable 0 "_0") form in
-        let enforcement = mk_cnd (mk_enforce 0 aut) (Mode.mode_numId mode) in
+        let enforcement = Basic.FVar (mk_enforce_cnd 0 aut mode) (* mk_cnd (mk_enforce 0 aut) (Mode.mode_numId mode)*) in
         Basic.make_and [from_mapped; enforcement]
 
 let mk_init_network n =
@@ -859,7 +863,7 @@ let mk_goal_network n k heuristic =
 				      let (r_aut, r_modes) = List.find (fun (a, modes) -> a = a_obj) reachable in
 				      match List.mem autmode r_modes with
 				      | false -> False
-				      | true -> mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)
+				      | true -> Basic.FVar (mk_enforce_cnd k a_obj autmode) (* mk_cnd (mk_enforce k a_obj) (Mode.mode_numId autmode)*)
 				    end
 				   )
 				   mode_list in
@@ -967,16 +971,16 @@ let mk_jump aut j i =
 
 let trans_jump aut j i =
         let (org, lab, des, jmp) = j in
-        let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
-        let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
+        let enforce_org = Basic.FVar (mk_enforce_cnd i aut org) (*mk_cnd (mk_enforce i aut) (Mode.mode_numId org)*) in
+        let enforce_des = Basic.FVar (mk_enforce_cnd (i+1) aut des) (* mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des))*) in
         let jmp = mk_jump aut j i in
         let enforcement = Basic.make_and [enforce_org; enforce_des] in
         Basic.make_and [jmp; enforcement]
 
 let trans_jump_sync aut j i =
         let (org, lab, des, jmp) = j in
-        let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId org) in
-        let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des) in
+        let enforce_org = Basic.FVar (mk_enforce_cnd i aut org) (*mk_cnd (mk_enforce i aut) (Mode.mode_numId org)*) in
+        let enforce_des = Basic.FVar (mk_enforce_cnd (i+1) aut des) (* mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId des))*) in
         let jmp = mk_jump aut j i in
 	let enforcement = Basic.make_and [enforce_org; enforce_des] in
         let glab = Hybrid.labellist aut in
@@ -1000,8 +1004,8 @@ let trans_jump_sync_noop aut i heuristic ia =
 					       aut_vars
 				     ) in
                         let syncs = Basic.make_and (List.map (fun v -> Basic.Not (Basic.FVar (mk_sync i v))) glab) in
-                        let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId m) in
-                        let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId m) in
+                        let enforce_org = Basic.FVar (mk_enforce_cnd i aut m) (*mk_cnd (mk_enforce i aut) (Mode.mode_numId m)*) in
+                        let enforce_des = Basic.FVar (mk_enforce_cnd (i+1) aut m)(*mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId m) *) in
                         Basic.make_and [syncs; enforce_org; enforce_des; change_unused]
                 end
         ) amodes
@@ -1026,8 +1030,8 @@ let mk_noop_global aut i heuristic ia =
   let modes = List.map (fun m -> Mode.mode_id m) (filter_aut_mode_distance aut i heuristic ia) in
   let explicit_enforce = Basic.make_or (List.map (fun key ->
 						  let mode = (Map.find key (Hybrid.modemap aut)) in
-						  let enforce_org = mk_cnd (mk_enforce i aut) (Mode.mode_numId mode) in
-						  let enforce_des = mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId mode) in
+						  let enforce_org = Basic.FVar (mk_enforce_cnd i aut mode) (*mk_cnd (mk_enforce i aut) (Mode.mode_numId mode)*) in
+						  let enforce_des = Basic.FVar (mk_enforce_cnd (i+1) aut mode) (*mk_cnd (mk_enforce (i+1) aut) (Mode.mode_numId mode)*) in
 						  Basic.make_and [enforce_org; enforce_des]
 						 ) modes) in
   let is_noop =  (Basic.FVar (mk_aut_noop i aut)) in
@@ -1205,7 +1209,7 @@ let trans_network n i k heuristic =
 
 let mk_active_mode (aut: Hybrid.t) (m: Mode.t) (i: int) =
         let nId = Mode.mode_numId m in
-        let enf = mk_cnd (mk_enforce i aut) nId in
+        let enf = Basic.FVar (mk_enforce_cnd i aut m) (*mk_cnd (mk_enforce i aut) nId*) in
         let nenf = Basic.Not enf in
         let gam0 = mk_cnd (mk_gamma i aut m) 0 in
         let gam1 = mk_cnd (mk_gamma i aut m) 1 in
@@ -1301,10 +1305,10 @@ let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option)
                 begin
                         let vrep = Basic.Eq (Basic.Var (mk_variable i "_t" v), Basic.Var (mk_variable (i+1) "_0" v)) in
                         let frep = List.map (fun (a, m, t, l, f) -> (a, m, t, l, (Basic.subst_formula (mk_jmp_variable i) f))) fl in
-                        let frepconj = List.map (fun (a, m, t, l, f) -> Basic.Not (Basic.make_and [(mk_cnd (mk_enforce (i) a) m.mode_numId); f])) frep in
+                        let frepconj = List.map (fun (a, m, t, l, f) -> Basic.Not (Basic.make_and [Basic.FVar (mk_enforce_cnd i a m) (*(mk_cnd (mk_enforce (i) a) m.mode_numId)*); f])) frep in
                         let frepnot = List.map (fun f -> f) frepconj in
 
-                        let ax = List.map (fun (a, m, t, l, f) -> Basic.make_and [(mk_cnd (mk_enforce (i+1) a) m.mode_numId);f]) frep in
+                        let ax = List.map (fun (a, m, t, l, f) -> Basic.make_and [Basic.FVar (mk_enforce_cnd (i+1) a m) (*(mk_cnd (mk_enforce (i+1) a) m.mode_numId)*);f]) frep in
                         let wx = List.map (fun (a, m, t, l, f) ->
                                 begin
                                         let glab = Hybrid.labellist a in
@@ -1317,7 +1321,7 @@ let mk_frame_axiom (n: Network.t) (i: int) k (heuristic : Costmap.t list option)
 
                                 end
                         ) frep in
-                        let ds = List.map (fun (a, m, t, l, f) -> (*Basic.Not*) (Basic.make_and [(mk_cnd (mk_enforce i a) m.mode_numId);(mk_cnd (mk_enforce (i+1) a) (Mode.mode_numId (getMode a t))); f])) frep in
+                        let ds = List.map (fun (a, m, t, l, f) -> (*Basic.Not*) (Basic.make_and [Basic.FVar (mk_enforce_cnd i a m)(*(mk_cnd (mk_enforce i a) m.mode_numId)*);Basic.FVar (mk_enforce_cnd (i+1) a (getMode a t))(*(mk_cnd (mk_enforce (i+1) a) (Mode.mode_numId (getMode a t)))*); f])) frep in
                         let bx = vrep::ds in
                         let cx = List.map (fun x -> Basic.make_and ((List.nth bx x)::(List.mapi (fun ai el ->
                         begin
@@ -1355,7 +1359,7 @@ let mk_non_noop_must_happen (n: Network.t) (i: int) k (heuristic : Costmap.t lis
 let mk_mode_pair_mutex (aut: Hybrid.t) (m: Mode.t) (m1: Mode.t) (i: int) =
   let nId = Mode.mode_numId m in
   let nId1 = Mode.mode_numId m1 in
-  Basic.make_or( [Basic.Not(mk_cnd (mk_enforce i aut) nId);Basic.Not(mk_cnd (mk_enforce i aut) nId1)] )
+  Basic.make_or( [Basic.Not(Basic.FVar (mk_enforce_cnd i aut m)(*mk_cnd (mk_enforce i aut) nId*));Basic.Not(Basic.FVar (mk_enforce_cnd i aut m1)(*mk_cnd (mk_enforce i aut) nId1*))] )
 
 
 let mk_mode_mutex (n: Network.t) (i: int) k (heuristic : Costmap.t list option) =
@@ -1476,17 +1480,18 @@ let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (heu
          )
       )
   in
-  let enforcement = List.flatten (List.map (
+  let enforcement = List.flatten (List.flatten (List.map (
     fun y ->
       List.map (
         fun x -> begin
-          let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap y)) in
-          (mk_enforce x y, Value.Intv (1.0, float_of_int (List.length modes)), Value.Num 0.0)
+		let modes = List.map (fun (_, x) -> x) (Map.bindings (Hybrid.modemap y)) in
+          (*(mk_enforce x y, Value.Intv (1.0, float_of_int (List.length modes)), Value.Num 0.0)*)
+		List.map (fun m ->  (mk_enforce_cnd x y m)) modes
         end
       )
       (List.of_enum (0 -- k))
     )
-  (Network.automata h)) in
+  (Network.automata h))) in
   let syncs =  List.flatten (List.map (fun l ->
       List.map (fun i ->
           (DeclareBool (mk_sync i l))
@@ -1555,7 +1560,8 @@ let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (heu
   (Network.automata h)) in
   let new_vardecls = List.flatten [vardecls'; time_vardecls] in
   let (vardecl_cmds, assert_cmds_list) = split_decls_assertions new_vardecls path in
-  let (enfdecl_cmds, assert_enf_list) = split_decls_assertions enforcement path in
+  (* let (enfdecl_cmds, assert_enf_list) = split_decls_assertions_bool enforcement path in *)
+  let enfdecl_cmds = List.map (fun e -> (DeclareBool (e))) enforcement in
   let (gamdecl_cmds, assert_gam_list) = split_decls_assertions gamma path in
   let (gamdecl_cmds_t, assert_gam_list_t) = split_decls_assertions gamma_t path in
   let org_vardecl_cmds = List.map
@@ -1566,7 +1572,7 @@ let compile_vardecl (h : Network.t) (k : int) (path : (string list) option) (heu
                                    | _ -> raise (Failure "Variable declaration includes interval precision"))
                            vardecls in
   let assert_cmds = List.flatten assert_cmds_list in
-  let assert_enf = List.flatten assert_enf_list in
+  (* let assert_enf = List.flatten assert_enf_list in*)
   let assert_gam = List.flatten assert_gam_list in
   let assert_gam_t = List.flatten assert_gam_list_t in
   let noopdecl = List.flatten (List.map (fun aut -> List.map (fun i -> (DeclareBool (mk_aut_noop i aut))) (List.of_enum (0 -- (k-1)))) (Network.automata h)) in

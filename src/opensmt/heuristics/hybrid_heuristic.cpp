@@ -277,43 +277,47 @@ void hybrid_heuristic::inform(Enode * e) {
 	      (*time_aut_noop_enodes[time])[aut-1] = e;
 	      noop_enodes.insert(e);
 	    }
-        }
-    } else if (e->isEq() && !e->isNot()) {
-        DREAL_LOG_INFO << "hybrid_heuristic::inform(): " << e << endl;
-        unordered_set<Enode *> const & vars = e->get_vars();
-        bool found_mode_literal = false;
-        for (auto const & v : vars) {
-            stringstream ss;
-            ss << v;
-            string var = ss.str();
-            if (var.find("mode") == 0) {
+    //     }
+    // } else if (e->isEq() && !e->isNot()) {
+    //     DREAL_LOG_INFO << "hybrid_heuristic::inform(): " << e << endl;
+    //     unordered_set<Enode *> const & vars = e->get_vars();
+    //     bool found_mode_literal = false;
+    //     for (auto const & v : vars) {
+    //         stringstream ss;
+    //         ss << v;
+    //         string var = ss.str();
+            else if (var.find("mode") == 0) {
                 int autom_pos = var.find("_") + 1;
-                int time_pos = var.rfind("_") + 1;
-                int time = atoi(var.substr(time_pos).c_str());
+                int time_pos = var.find("_", autom_pos+1) + 1;
+		int mode_pos = var.find("_", time_pos+1) + 1;
+		int end_mode_pos = var.find("_", mode_pos+1) + 1;
+		
+                int time = atoi(var.substr(time_pos, mode_pos-1).c_str());
                 int autom =
                     (predecessors.size() == 1 ? 1
                                               : atoi(var.substr(autom_pos, time_pos - 1).c_str()));
-                int mode = get_mode(e);
+		int mode = atoi(var.substr(mode_pos, end_mode_pos-1).c_str());
+                // int mode = get_mode(e);
 
-                if (mode > -1) {
+                if (mode > -1 && mode_enodes.find(e) ==  mode_enodes.end()) {
                     DREAL_LOG_INFO << "autom = " << autom << " mode = " << mode
-                                   << " time = " << time << endl;
+                                   << " time = " << time << " " << e << endl;
                     (*mode_literals[autom - 1])[e] = new pair<int, int>(mode, time);
-                    DREAL_LOG_INFO
-                        << "Mode_lit[" << (e->getPolarity() == l_True ? "     " : "(not ") << e
-                        << (e->getPolarity() == l_True ? "" : ")") << "] = " << mode << " " << time
-                        << endl;
-
+		   
+                    // DREAL_LOG_INFO
+                    //     << "Mode_lit[" << (e->getPolarity() == l_True ? "     " : "(not ") << e
+                    //     << (e->getPolarity() == l_True ? "" : ")") << "] = " << mode << " " << time
+                    //     << endl;
                     (*(*time_mode_enodes[autom - 1])[time])[mode - 1] = e;
-                    found_mode_literal = true;
+                    //found_mode_literal = true;
                     mode_enodes.insert(e);
                 }
             }
-        }
-        if (!found_mode_literal) {
-            // add to default false suggestions
-            default_false_suggestions.push_back(e);
-        }
+         }
+        // if (!found_mode_literal) {
+        //     // add to default false suggestions
+        //     default_false_suggestions.push_back(e);
+        // }
         // } else if (e->isIntegral() && m_egraph->stepped_flows){
         //   int m_mode = static_cast<int>(e->getCdr()->getCar()->getValue());
         //   DREAL_LOG_DEBUG << "mode = " << m_mode;
@@ -1372,12 +1376,13 @@ bool hybrid_heuristic::getSuggestions() {
 
         Enode * s;
         if ((*time_mode_enodes[autom])[time]->size() > 0) {
-            if (suggest_false) {
+	    if (suggest_false) {
                 for (int i = 0; i < static_cast<int>(predecessors[autom]->size()); i++) {
                     if (i != mode - 1) {
                         s = (*(*time_mode_enodes[autom])[time])[i];
-                        if (suggest_false && s &&  // s->getDecPolarity() == l_Undef &&
-                            !s->hasPolarity() && !s->isDeduced()) {
+                        if (suggest_false && s //&&  // s->getDecPolarity() == l_Undef &&
+                            //!s->hasPolarity() && !s->isDeduced()
+			    ) {
                             // s->setDecPolarity(l_False);
                             m_suggestions.push_back(new pair<Enode *, bool>(s, false));
                             DREAL_LOG_INFO << "Suggested Neg: " << s << endl;
@@ -1385,7 +1390,8 @@ bool hybrid_heuristic::getSuggestions() {
                     }
                 }
             }
-
+ DREAL_LOG_INFO << "Can suggest";
+         
             s = (*(*time_mode_enodes[autom])[time])[mode - 1];
             DREAL_LOG_INFO << "enode = " << s << endl;
             if (  // s->getDecPolarity() == l_Undef &&

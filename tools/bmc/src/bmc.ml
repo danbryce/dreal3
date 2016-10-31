@@ -652,7 +652,7 @@ let mk_cnd term c =
         Basic.Eq (Basic.Var (term), Basic.Num (float_of_int c))
 
 let mk_enforce_cnd k aut mode =
-  "mode_" ^ (string_of_int (Hybrid.numid aut))  ^ "_" ^ (string_of_int k)  ^  "_" ^ (string_of_int (Mode.mode_numId mode)) ^ "_" ^ (Mode.mode_id mode)
+  "mode_" ^ (string_of_int (Hybrid.numid aut))  ^ "_" ^ (string_of_int k)  ^  "_" ^ (string_of_int (Mode.mode_numId mode)) ^ "_" ^ (Hybrid.name aut) ^ "_" ^ (Mode.mode_id mode)
 
 		 
 let mk_gamma_nt aut mode =

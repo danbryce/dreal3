@@ -538,7 +538,11 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
             }
         } else {
             DREAL_LOG_INFO << "mcts_icp::solve() end state";
-	    
+
+	    if(current == root){
+	      // root has no children, so unsat
+	      return;
+	    }
 	    
             last = current;
 

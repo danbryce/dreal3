@@ -99,5 +99,9 @@ void mcts_node::backpropagate() {
         }
         m_value /= m_children_list.size();  // average value backprop
     }
+    // else {
+    //   m_size = 0;
+    //   m_value = numeric_limits<double>::lowest();
+    // }
     DREAL_LOG_INFO << "mcts_node::backpropagate(" << m_id << ") size = " << m_size << " value = " << m_value;
 }

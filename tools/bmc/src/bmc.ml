@@ -656,7 +656,7 @@ let mk_enforce_cnd k aut mode =
 
 		 
 let mk_gamma_nt aut mode =
-        "gamma_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int (Mode.mode_numId mode))
+        "gamma_" ^ (Hybrid.name aut) ^ "_" ^ (string_of_int (Mode.mode_numId mode))  ^ "_" ^ (Mode.mode_id mode)
 
 let mk_gamma k aut mode =
         (mk_gamma_nt aut mode) ^ "_" ^ (string_of_int k) ^ "_0"

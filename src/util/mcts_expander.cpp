@@ -109,8 +109,6 @@ double icp_mcts_expander::simulate(mcts_node * node) {
     double average_score = 0;
     int num_simulations = 1;
 
-    
-
     for (int sim = 0; sim < num_simulations; sim++) {
       DREAL_LOG_INFO << "icp_mcts_expander::simulate() run = " << sim;
     if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {

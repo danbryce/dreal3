@@ -90,7 +90,7 @@ void icp_mcts_expander::expand(mcts_node * node) {
                                                 << endl;
                 }
             } else {
-	      //std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
+	      std::cout << "mcts_expander::expand(mcts_node) found delta-sat";
                 icp_node->set_solution(true);
             }
         }
@@ -106,8 +106,8 @@ double icp_mcts_expander::simulate(mcts_node * node) {
     double average_score = 0;
     int num_simulations = 1;
 
-    for (int sim = 0; sim <= num_simulations; sim++) {
-    
+    for (int sim = 0; sim < num_simulations; sim++) {
+      DREAL_LOG_INFO << "icp_mcts_expander::simulate() run = " << sim;
     if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
         m_cs.m_box = icp_node->get_box();
         while (!m_cs.m_box.is_empty() && !m_cs.m_box.is_point()) {  // either not unsat or not sat

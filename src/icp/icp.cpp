@@ -503,7 +503,13 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
                        << "\t"
                        << "graph Size = " << root->size();
 
-        mcts_node * current = root;
+	// ofstream mcts_out;
+	// mcts_out.open("mcts.dot");
+	// root->draw_dot(mcts_out);
+	// mcts_out.close();
+	// sleep(1);
+
+	mcts_node * current = root;
         mcts_node * last = current;
 
         // Get leaf node
@@ -542,14 +548,18 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
 	    if(current == root){
 	      // root has no children, so unsat
 	      return;
+	    } else if(current->is_solution()){
+	      current->simulate();
+	    } else {
+	      // current is an unsat box
+	      delete current;
+	      current = NULL;
 	    }
-	    
-            last = current;
 
-	    if(last->is_solution()){
-	      last->simulate();
-	    }
 	    
+
+	    last = current;
+
         }
 
         // DREAL_LOG_INFO << "mcts_icp::solve() backpropagate";

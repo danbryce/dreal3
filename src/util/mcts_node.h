@@ -22,12 +22,13 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <queue>
 #include <vector>
-
+#include <iostream>
 #include "util/box.h"
 #include "util/logging.h"
 #include "util/mcts_expander.h"
 
 using std::vector;
+using std::ostream;
 
 namespace dreal {
 class mcts_expander;
@@ -71,7 +72,7 @@ public:
         }
     }
     explicit mcts_node(mcts_expander * expander) : mcts_node(NULL, expander) {}
-    virtual ~mcts_node() {}
+    virtual ~mcts_node();
 
     mcts_node * select();              // Select a child node
     virtual mcts_node * expand() = 0;  // Expand a leaf node
@@ -91,6 +92,8 @@ public:
     int visits() const { return m_visits; }
     void inc_visits() { m_visits++; }
     bool terminal() const { return m_terminal; }
+
+    virtual void draw_dot(ostream & out) = 0; // create dot file
 };
 
 class icp_mcts_node : public mcts_node {
@@ -108,6 +111,8 @@ public:
     box get_box() const { return m_box; }
     vector<box> get_sat_simulation_boxes() const { return sat_simulation_boxes; }
     void add_sat_simulation_box(box b) { sat_simulation_boxes.push_back(b); }
+
+    virtual void draw_dot(ostream & out); // create dot file
 };
 
 bool operator==(icp_mcts_node const & n1, icp_mcts_node const & n2);

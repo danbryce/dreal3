@@ -643,7 +643,9 @@ let compile_ode_definition_unit (h : Hybrid.t) k =
 
 let mk_variable k suffix (s: string) : string =
   let str_step = string_of_int k in
-  (String.join "_" [s; str_step;]) ^ suffix
+  match s with
+    "time" ->  (String.join "_" [s; str_step;])
+  | _ -> (String.join "_" [s; str_step;]) ^ suffix
 
 let mk_enforce k aut =
         "mode_" ^ (string_of_int (Hybrid.numid aut)) ^ "_" ^ (string_of_int k)
@@ -775,8 +777,9 @@ let mk_inv_q mode i =
   match invs with
     None -> []
   | Some fl -> begin
-               let invs_mapped = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f) fl in
-               (* let conj_invs = Basic.make_and invs_mapped in
+               let invs_mapped_t = List.map (fun f -> Basic.subst_formula (mk_variable i "_t") f)
+					    (List.filter (fun f -> not (Set.mem "time" (Basic.collect_vars_in_formula f))) fl) in
+	       let invs_mapped_0 = List.map (fun f -> Basic.subst_formula (mk_variable i "_0") f) fl in               (* let conj_invs = Basic.make_and invs_mapped in
                match conj_invs with
                  Basic.True -> Basic.True
                | _ ->
@@ -784,16 +787,17 @@ let mk_inv_q mode i =
                                  Basic.Num 0.0,
                                  Basic.Var time_var,
                                  conj_invs) *)
-	       let conj_invs = invs_mapped in
-               match List.length conj_invs == 0 with
+	       (*let conj_invs = invs_mapped in*)
+               match List.length invs_mapped_0 == 0 with
                  true -> []
                | _ ->
+		  List.flatten [  invs_mapped_0;
 		  List.map (fun c ->
                   Basic.ForallT (Basic.Num (float_of_int i),
                                  Basic.Num 0.0,
                                  Basic.Var time_var,
                                  c)
-			   ) conj_invs
+			   ) invs_mapped_t]
              end
 
 let mk_inv (n: Network.t) i k (heuristic : Costmap.t list option) =

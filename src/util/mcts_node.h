@@ -38,7 +38,7 @@ struct mcts_node_compare {
     bool operator()(const mcts_node * a, const mcts_node * b) { return &a < &b; }
 };
 
-static const double UCT_COEFFICIENT = 0.1;
+static const double UCT_COEFFICIENT = 0.15;
 static int id_counter = 0;
 
 class mcts_node {
@@ -81,6 +81,7 @@ public:
 
     int size() const { return m_size; }
     mcts_node * parent() const { return m_parent; }
+    void set_parent(mcts_node * parent) { m_parent = parent; }
     double value() const { return m_value; }
     void set_value(double value) { m_value = value; }
     double score() const { return m_score; }

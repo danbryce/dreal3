@@ -202,12 +202,14 @@ void contractor_ibex_fwdbwd::prune(contractor_status & cs) {
     old_iv = cs.m_box.get_values();
     assert(m_numctr->f.nb_arg() >= 0 &&
            static_cast<unsigned>(m_numctr->f.nb_arg()) <= cs.m_box.size());
-    DREAL_LOG_DEBUG << "Before pruning using ibex_fwdbwd(" << *m_numctr << ")";
+    DREAL_LOG_DEBUG << "Before pruning using ibex_fpfwdbwd(" << *m_numctr << ")";
     DREAL_LOG_DEBUG << cs.m_box;
     DREAL_LOG_DEBUG << "ibex interval = " << cs.m_box.get_values() << " (before)";
     DREAL_LOG_DEBUG << "function = " << ctc->f;
     DREAL_LOG_DEBUG << "domain   = " << ctc->d;
-    ctc->contract(cs.m_box.get_values());
+    ibex::CtcFixPoint fp(*ctc,0);
+    fp.contract(cs.m_box.get_values());
+    //ctc->contract(cs.m_box.get_values());
     DREAL_LOG_DEBUG << "ibex interval = " << cs.m_box.get_values() << " (after)";
     // cerr << output.empty() << used_constraints.empty() << " ";
     auto & new_iv = cs.m_box.get_values();

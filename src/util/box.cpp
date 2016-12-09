@@ -66,6 +66,8 @@ using std::streamsize;
 using std::string;
 using std::tuple;
 using std::uniform_real_distribution;
+using std::uniform_int_distribution;
+using std::generate_canonical;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
@@ -188,7 +190,7 @@ ostream & display_diff(ostream & out, box const & b1, box const & b2) {
 
 ostream & display(ostream & out, box const & b, bool const exact, bool const old_style) {
     streamsize ss = out.precision();
-    out.precision(16);
+    out.precision(100);
     if (old_style) {
         out << "delta-sat with the following box:" << endl;
         unsigned const s = b.size();
@@ -218,6 +220,7 @@ ostream & display(ostream & out, box const & b, bool const exact, bool const old
             display(out, d, exact);
             out << " = ";
             display(out, v, exact);
+	    out << " {" << (v.ub()-v.lb()) << "}";
         }
     }
     out.precision(ss);
@@ -440,8 +443,38 @@ box box::sample_dimension(int dim) const {
     double const lb = iv.lb();
     double const ub = iv.ub();
     if (lb != ub) {
-        uniform_real_distribution<double> m_dist(lb, ub);
-        b[dim] = ibex::Interval(m_dist(rg));
+      // uniform_real_distribution<double> m_dist(lb, ub);
+      // b[dim] = ibex::Interval(m_dist(rg));
+      
+      // double canonical = generate_canonical<double, 1>(rg);
+      // double value = (ub-lb)*canonical+lb;
+
+      // ostringstream ss;
+      // ss << setprecision(100) << "can = " << canonical << " value = " << value;
+      // DREAL_LOG_DEBUG << ss.str();
+      // b[dim] = ibex::Interval(value);
+
+      int exponent = 0;
+      double value = 0;
+      do {
+	double mult = pow(2, exponent);
+      uniform_int_distribution<long> m_dist(((long)(mult*lb)), ((long)(mult*ub)));
+      long rvalue = m_dist(rg);
+       value = ((double)rvalue)/mult;
+      exponent++;
+      } while((value < lb || ub < value) && exponent <= 16);
+      std::cout << " " << exponent;
+      if(value < lb || ub < value) {
+      	std::cout << "Bad Precision" << std::endl;
+	// ostringstream ss;
+        // ss << setprecision(100) << " rvalue = " << rvalue << " mult = " << mult << " value = " << value;
+        // DREAL_LOG_DEBUG << ss.str();
+      	exit(0);
+      }
+      
+       b[dim] = ibex::Interval(value);
+
+      
     }
     return b;
 }

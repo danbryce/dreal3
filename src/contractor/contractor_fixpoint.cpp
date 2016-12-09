@@ -172,18 +172,41 @@ void contractor_fixpoint::worklist_fixpoint_alg(contractor_status & cs) {
     queue<int> q;
     ibex::BitSet ctc_bitset(m_clist.size());
     // Add all contractors to the queue.
-    for (size_t i = 0; i < m_clist.size(); ++i) {
+    DREAL_LOG_DEBUG << " --- fp first pass --- ";
+      
+    for (unsigned i = 0; i < m_clist.size(); ++i) {
         contractor & c_i = m_clist[i];
         contractor_status_guard csg(cs);
         c_i.prune(cs);
         if (cs.m_box.is_empty()) {
             return;
         }
-        ibex::BitSet const & output_i = cs.m_output;
-        if (!output_i.empty()) {
-            assert(!ctc_bitset.contain(i));
-            q.push(i);
-            ctc_bitset.add(i);
+        // ibex::BitSet const & output_i = cs.m_output;
+        // if (!output_i.empty()) {
+        //     assert(!ctc_bitset.contain(i));
+        //     q.push(i);
+        //     ctc_bitset.add(i);
+        // }
+	auto const & c_output = cs.m_output;
+        if (!c_output.empty()) {
+            // j-th dimension is changed as a result of pruning
+            // need to add a contractor which takes j-th dim as an input
+            int j = c_output.min();
+            do {
+                if (!c_output.contain(j)) {
+                    continue;
+                }
+		DREAL_LOG_DEBUG << "adding deps for " << cs.m_box.get_vars()[j];
+                for (int const dependent_ctc_id : m_dep_map[j]) {
+                    if (!ctc_bitset.contain(dependent_ctc_id) && dependent_ctc_id != i) {
+		      DREAL_LOG_DEBUG << "adding dep " << m_clist[dependent_ctc_id];
+                        q.push(dependent_ctc_id);
+                        ctc_bitset.add(dependent_ctc_id);
+                    }
+                }
+		
+                j = c_output.next(j);
+            } while (j < c_output.max());
         }
     }
 
@@ -192,6 +215,7 @@ void contractor_fixpoint::worklist_fixpoint_alg(contractor_status & cs) {
     }
     // Fixed Point Loop
     do {
+      DREAL_LOG_DEBUG << " --- start fp loop --- |q| = " << q.size();
         interruption_point();
         int const idx = q.front();
         q.pop();
@@ -214,8 +238,10 @@ void contractor_fixpoint::worklist_fixpoint_alg(contractor_status & cs) {
                 if (!c_output.contain(j)) {
                     continue;
                 }
-                for (int const dependent_ctc_id : m_dep_map[j]) {
-                    if (!ctc_bitset.contain(dependent_ctc_id)) {
+		DREAL_LOG_DEBUG << "adding deps for " << cs.m_box.get_vars()[j];
+                 for (int const dependent_ctc_id : m_dep_map[j]) {
+                    if (1 || !ctc_bitset.contain(dependent_ctc_id) && dependent_ctc_id != idx) {
+		      DREAL_LOG_DEBUG << "adding dep " << m_clist[dependent_ctc_id];
                         q.push(dependent_ctc_id);
                         ctc_bitset.add(dependent_ctc_id);
                     }
@@ -223,9 +249,18 @@ void contractor_fixpoint::worklist_fixpoint_alg(contractor_status & cs) {
                 j = c_output.next(j);
             } while (j < c_output.max());
         }
-    } while (q.size() > 0 && (m_old_box != cs.m_box) &&
-             cs.m_box.is_bisectable(cs.m_config.nra_precision) &&
-             !m_term_cond(m_old_box, cs.m_box));
+
+	DREAL_LOG_DEBUG << (q.size() > 0) << " "
+			<< (m_old_box != cs.m_box) << " "
+			<< cs.m_box.is_bisectable(cs.m_config.nra_precision) << " "
+			<< !m_term_cond(m_old_box, cs.m_box);
+	
+    } while (q.size() > 0 && //(m_old_box != cs.m_box) &&
+             cs.m_box.is_bisectable(cs.m_config.nra_precision) //&&
+             //!m_term_cond(m_old_box, cs.m_box)
+	     );
+    DREAL_LOG_DEBUG << " --- exit fp loop --- ";
+      
     return;
 }
 }  // namespace dreal

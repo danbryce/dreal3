@@ -84,6 +84,7 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
   , doing_t_simp     ( false ) // DON'T CHANGE !
 #endif
   , axioms_checked   ( 0 )
+  , heuristic_shows_not_unsat (true)
   // Parameters: (formerly in 'SearchParams')
   , var_decay        ( 1 / 0.95 )
   , clause_decay     ( 1 / 0.999 )
@@ -125,7 +126,6 @@ CoreSMTSolver::CoreSMTSolver( Egraph & e, SMTConfig & c )
   , elim_tvars            (0)
 #endif
   , init                  (false)
-  , heuristic_shows_not_unsat (true)
 {
 
   if(c.nra_plan_heuristic.compare("") != 0){

@@ -220,7 +220,7 @@ ostream & display(ostream & out, box const & b, bool const exact, bool const old
             display(out, d, exact);
             out << " = ";
             display(out, v, exact);
-	    out << " {" << (v.ub()-v.lb()) << "}";
+            out << " {" << (v.ub() - v.lb()) << "}";
         }
     }
     out.precision(ss);
@@ -443,38 +443,37 @@ box box::sample_dimension(int dim) const {
     double const lb = iv.lb();
     double const ub = iv.ub();
     if (lb != ub) {
-      // uniform_real_distribution<double> m_dist(lb, ub);
-      // b[dim] = ibex::Interval(m_dist(rg));
-      
-      // double canonical = generate_canonical<double, 1>(rg);
-      // double value = (ub-lb)*canonical+lb;
+        // uniform_real_distribution<double> m_dist(lb, ub);
+        // b[dim] = ibex::Interval(m_dist(rg));
 
-      // ostringstream ss;
-      // ss << setprecision(100) << "can = " << canonical << " value = " << value;
-      // DREAL_LOG_DEBUG << ss.str();
-      // b[dim] = ibex::Interval(value);
+        // double canonical = generate_canonical<double, 1>(rg);
+        // double value = (ub-lb)*canonical+lb;
 
-      int exponent = 0;
-      double value = 0;
-      do {
-	double mult = pow(2, exponent);
-      uniform_int_distribution<long> m_dist(((long)(mult*lb)), ((long)(mult*ub)));
-      long rvalue = m_dist(rg);
-       value = ((double)rvalue)/mult;
-      exponent++;
-      } while((value < lb || ub < value) && exponent <= 16);
-      std::cout << " " << exponent;
-      if(value < lb || ub < value) {
-      	std::cout << "Bad Precision" << std::endl;
-	// ostringstream ss;
-        // ss << setprecision(100) << " rvalue = " << rvalue << " mult = " << mult << " value = " << value;
+        // ostringstream ss;
+        // ss << setprecision(100) << "can = " << canonical << " value = " << value;
         // DREAL_LOG_DEBUG << ss.str();
-      	exit(0);
-      }
-      
-       b[dim] = ibex::Interval(value);
+        // b[dim] = ibex::Interval(value);
 
-      
+        int exponent = 0;
+        double value = 0;
+        do {
+            double mult = pow(2, exponent);
+            uniform_int_distribution<long> m_dist(((long)(mult * lb)), ((long)(mult * ub)));
+            long rvalue = m_dist(rg);
+            value = ((double)rvalue) / mult;
+            exponent++;
+        } while ((value < lb || ub < value) && exponent <= 16);
+        std::cout << " " << exponent;
+        if (value < lb || ub < value) {
+            std::cout << "Bad Precision" << std::endl;
+            // ostringstream ss;
+            // ss << setprecision(100) << " rvalue = " << rvalue << " mult = " << mult << " value =
+            // " << value;
+            // DREAL_LOG_DEBUG << ss.str();
+            exit(0);
+        }
+
+        b[dim] = ibex::Interval(value);
     }
     return b;
 }

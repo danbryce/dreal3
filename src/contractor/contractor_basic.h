@@ -196,8 +196,7 @@ private:
     unsigned m_num_nohit{};
     std::unordered_map<std::vector<ibex::Interval>,
                        std::tuple<std::vector<ibex::Interval>, ibex::BitSet,
-                                  std::unordered_set<std::shared_ptr<constraint>>, bool>>
-        m_cache;
+                                  std::unordered_set<std::shared_ptr<constraint>>, bool>> m_cache;
 };
 
 class contractor_sample : public contractor_cell {

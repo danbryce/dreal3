@@ -503,13 +503,13 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
                        << "\t"
                        << "graph Size = " << root->size();
 
-	 // ofstream mcts_out;
-	 // mcts_out.open("mcts.dot");
-	 // root->draw_dot(mcts_out);
-	 // mcts_out.close();
-	 // sleep(.5);
+        // ofstream mcts_out;
+        // mcts_out.open("mcts.dot");
+        // root->draw_dot(mcts_out);
+        // mcts_out.close();
+        // sleep(.5);
 
-	mcts_node * current = root;
+        mcts_node * current = root;
         mcts_node * last = current;
 
         // Get leaf node
@@ -533,10 +533,10 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
                 cs.m_config.nra_found_soln++;
                 DREAL_LOG_INFO << "mcts_icp::solve() found solution, used #nodes = "
                                << root->size();
-		icp_mcts_node *inode = NULL;
-		if(inode = dynamic_cast<icp_mcts_node*>(last)){
-		  cs.m_box = inode->get_sat_simulation_boxes().back();
-		}
+                icp_mcts_node * inode = NULL;
+                if ((inode = dynamic_cast<icp_mcts_node *>(last))) {
+                    cs.m_box = inode->get_sat_simulation_boxes().back();
+                }
                 if (cs.m_config.nra_multiple_soln > 1) {
                     // If --multiple_soln is used
                     output_solution(cs.m_box, cs.m_config, cs.m_config.nra_found_soln);
@@ -548,21 +548,18 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
         } else {
             DREAL_LOG_INFO << "mcts_icp::solve() end state";
 
-	    if(current == root){
-	      // root has no children, so unsat
-	      return;
-	    } else if(current->is_solution()){
-	      current->simulate();
-	    } else {
-	      // current is an unsat box
-	      delete current;
-	      current = NULL;
-	    }
+            if (current == root) {
+                // root has no children, so unsat
+                return;
+            } else if (current->is_solution()) {
+                current->simulate();
+            } else {
+                // current is an unsat box
+                delete current;
+                current = NULL;
+            }
 
-	    
-
-	    last = current;
-
+            last = current;
         }
 
         // DREAL_LOG_INFO << "mcts_icp::solve() backpropagate";
@@ -573,8 +570,6 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
             current->backpropagate();
             current = current->parent();
         }
-
-	
     } while (true);
 
     delete root;

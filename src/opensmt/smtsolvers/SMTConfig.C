@@ -151,6 +151,7 @@ SMTConfig::initializeConfig( )
   nra_mcss                     = false;
   nra_local_opt                = false;
   nra_worklist_fp              = false;
+  nra_gac                      = false;
   nra_simulation_thread        = false;
   nra_multiprune               = false;
   nra_multiheuristic           = false;
@@ -554,6 +555,9 @@ SMTConfig::parseCMDLine( int argc
             "use worklist fixpoint algorithm",
             "--worklist-fp");
     opt.add("", false, 0, 0,
+            "use generalized arc consistency algorithm",
+            "--gac");
+    opt.add("", false, 0, 0,
             "use a separate simulation thread in ICP",
             "--simulation");
     opt.add("", false, 0, 0,
@@ -672,6 +676,7 @@ SMTConfig::parseCMDLine( int argc
     }
 #endif
     nra_worklist_fp         = opt.isSet("--worklist-fp");
+    nra_gac                 = opt.isSet("--gac");
     nra_simulation_thread   = opt.isSet("--simulation");
     nra_multiprune          = opt.isSet("--multiprune");
     nra_multiheuristic      = opt.isSet("--multiheuristic");

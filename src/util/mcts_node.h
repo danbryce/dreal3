@@ -94,7 +94,7 @@ public:
     void inc_visits() { m_visits++; }
     bool terminal() const { return m_terminal; }
 
-    virtual void draw_dot(ostream & out) = 0; // create dot file
+    virtual void draw_dot(ostream & out) = 0;  // create dot file
 };
 
 class icp_mcts_node : public mcts_node {
@@ -113,7 +113,7 @@ public:
     vector<box> get_sat_simulation_boxes() const { return sat_simulation_boxes; }
     void add_sat_simulation_box(box b) { sat_simulation_boxes.push_back(b); }
 
-    virtual void draw_dot(ostream & out); // create dot file
+    virtual void draw_dot(ostream & out);  // create dot file
 };
 
 bool operator==(icp_mcts_node const & n1, icp_mcts_node const & n2);

@@ -29,33 +29,28 @@ using dreal::mcts_node;
 using dreal::icp_mcts_node;
 using std::numeric_limits;
 
-mcts_node::~mcts_node(){
-
-  //remove parent w/o any children
-  if(m_parent != NULL){
-    vector<mcts_node*> *parent_children = m_parent->children();
-    auto it = std::find(parent_children->begin(), parent_children->end(), this);
-    if(it != parent_children->end()){
-      parent_children->erase(it);		
+mcts_node::~mcts_node() {
+    // remove parent w/o any children
+    if (m_parent != NULL) {
+        vector<mcts_node *> * parent_children = m_parent->children();
+        auto it = std::find(parent_children->begin(), parent_children->end(), this);
+        if (it != parent_children->end()) {
+            parent_children->erase(it);
+        }
+        if (parent_children->empty()) {
+            mcts_node * parent;
+            m_parent = NULL;
+            delete parent;
+        }
     }
-    if(parent_children->empty()){
-      mcts_node* parent;
-      m_parent = NULL;
-      delete parent;
-      
-    }
-  }
 
-  //remove children
-  if(!m_children_list.empty()){
-    for(auto child : m_children_list){
-      child->set_parent(NULL);
-      delete child;
+    // remove children
+    if (!m_children_list.empty()) {
+        for (auto child : m_children_list) {
+            child->set_parent(NULL);
+            delete child;
+        }
     }
-  }
-
-  
-  
 }
 
 mcts_node * mcts_node::select() {
@@ -113,8 +108,8 @@ double mcts_node::simulate() {
     if (m_terminal && !m_is_solution) {
         m_value = numeric_limits<double>::lowest();
     } else {
-      m_value = ((m_value * m_visits)+ m_expander->simulate(this))/(m_visits+1);
-      // m_value = (m_value+ m_expander->simulate(this))/2;
+        m_value = ((m_value * m_visits) + m_expander->simulate(this)) / (m_visits + 1);
+        // m_value = (m_value+ m_expander->simulate(this))/2;
     }
     return m_value;
 }
@@ -123,37 +118,38 @@ void mcts_node::backpropagate() {
     // DREAL_LOG_INFO << "mcts_node::backpropagate(" << m_id << ") size = " << m_size;
     m_visits++;
     if (!m_children_list.empty()) {
-      m_visits++;
-      m_size = 0;
-      m_value = 0;
+        m_visits++;
+        m_size = 0;
+        m_value = 0;
         for (auto child : m_children_list) {
             m_size += child->size() + 1;
             m_value += child->value();
         }
         m_value /= m_children_list.size();  // average value backprop
+    } else {
+        // m_visits = 1;
+        //   m_size = 0;
+        //   m_value = numeric_limits<double>::lowest();
     }
-     else {
-       // m_visits = 1;
-    //   m_size = 0;
-    //   m_value = numeric_limits<double>::lowest();
-     }
-    DREAL_LOG_INFO << "mcts_node::backpropagate(" << m_id << ") size = " << m_size << " value = " << m_value;
+    DREAL_LOG_INFO << "mcts_node::backpropagate(" << m_id << ") size = " << m_size
+                   << " value = " << m_value;
 }
 
 void icp_mcts_node::draw_dot(ostream & out) {
-  bool is_root = (m_parent == NULL);
-  out.precision(2);
-  if(is_root){
-    out << "digraph icp_mcts_graph {\n";
-  }
-  
-  for(auto child : m_children_list){
-    out << "\"" << this->id() << " : " << this->visits() << " : " << this->value() << "\" -> \"" << child->id() << " : " << child->visits() << " : " << child->value() << "\" [label=\""<< child->score() << "\"];\n";
-    child->draw_dot(out);
-  }
-  
-  if(is_root){
-    out << "}";
-  }
-  
+    bool is_root = (m_parent == NULL);
+    out.precision(2);
+    if (is_root) {
+        out << "digraph icp_mcts_graph {\n";
+    }
+
+    for (auto child : m_children_list) {
+        out << "\"" << this->id() << " : " << this->visits() << " : " << this->value() << "\" -> \""
+            << child->id() << " : " << child->visits() << " : " << child->value() << "\" [label=\""
+            << child->score() << "\"];\n";
+        child->draw_dot(out);
+    }
+
+    if (is_root) {
+        out << "}";
+    }
 }

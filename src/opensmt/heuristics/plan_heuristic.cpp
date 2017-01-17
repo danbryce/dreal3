@@ -170,7 +170,7 @@ void plan_heuristic::inform(Enode * e) {
             if (var.find("act") == 0) {
                 int time = atoi(var.substr(var.find_last_of("_") + 1).c_str());
                 int spos = var.find_first_of("_") + 1;
-                int epos = var.find_last_of("_") - 1;
+                int epos = var.find_last_of("_");
                 string proc = var.substr(spos, epos - spos).c_str();
 
                 //  for (auto const & c : consts) {
@@ -190,7 +190,7 @@ void plan_heuristic::inform(Enode * e) {
             } else if (var.find("duract") == 0) {
                 int time = atoi(var.substr(var.find_last_of("_") + 1).c_str());
                 int spos = var.find_first_of("_") + 1;
-                int epos = var.find_last_of("_") - 1;
+                int epos = var.find_last_of("_");
                 string proc = var.substr(spos, epos - spos).c_str();
 
                 //  for (auto const & c : consts) {
@@ -203,7 +203,8 @@ void plan_heuristic::inform(Enode * e) {
                 duract_enodes.insert(e);
                 int choice = getChoiceIndex(e);
                 DREAL_LOG_INFO << "index = " << choice;
-                choices[num_choices_per_happening * (time) + choice] = e;
+		DREAL_LOG_INFO << "choices[" << (num_choices_per_happening * time + choice) << "] = " << e;
+                choices[num_choices_per_happening * time + choice] = e;
                 //    }
                 //  }
             }
@@ -494,18 +495,23 @@ bool plan_heuristic::expand_path() {
         Enode * current_enode = choices[num_choices_per_happening * time + choice];
         bool found_existing_value = false;
 
-        // if (current_enode != NULL) { //already has a preprocessed value
-        //   DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
-        // }
+         if (current_enode != NULL) { //already has a preprocessed value
+           DREAL_LOG_INFO << "choices[" << (num_choices_per_happening * time + choice) << "] = " << current_enode;
+         } else {
+	   DREAL_LOG_INFO << "choices[" << (num_choices_per_happening * time + choice) << "] = NULL";
+	 }
+	 
 
+	 if(current_enode != NULL){
         vector<bool> current_decision_copy(current_decision->begin(), current_decision->end());
         // prune out choices that are negated in m_stack
         for (auto e : m_stack) {
-            if (e->first == current_enode) {
-                current_decision->push_back(e->second);
-                found_existing_value = true;
-                break;
-            }
+	  if (e->first == current_enode) {
+	    DREAL_LOG_INFO << "Found decision at happening " << time << " " << current_enode;
+	    current_decision->push_back(e->second);
+	    found_existing_value = true;
+	    break;
+	  }
 
             // if (e->second != true) {
             //       //      DREAL_LOG_INFO << "Checking removal of " << e << endl;
@@ -524,15 +530,15 @@ bool plan_heuristic::expand_path() {
         }
         if (!found_existing_value) {
             // prefer to try one action at a time
-            if (existing_act_at_time) {
-                current_decision->push_back(true);
-                current_decision->push_back(false);
-            } else {
+            // if (existing_act_at_time) {
+            //     current_decision->push_back(true);
+            //     current_decision->push_back(false);
+            // } else {
                 DREAL_LOG_INFO << "Adding decision at happening " << time << " " << current_enode;
                 existing_act_at_time = true;
                 current_decision->push_back(false);
                 current_decision->push_back(true);
-            }
+		//}
         }
 
         // // remove choices that are too costly for time
@@ -554,7 +560,7 @@ bool plan_heuristic::expand_path() {
             DREAL_LOG_INFO << "No decisions left at time " << time << endl;
             return false;
         }
-
+	 }
         //    sort (current_decision->begin(), current_decision->end(), SubgoalCompare(autom,
         //    *this));
 

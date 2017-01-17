@@ -351,7 +351,7 @@ double box::get_bisection_ratio(int const i) const {
     if (is_time_variable(i) && m_values[i].contains(0.0)) {
         // DREAL_LOG_DEBUG << "Splitting time variable";
         // cout << "Splitting time variable" << i;
-        return 0.00001;
+      return 0.0001;
     } else {
         return 0.5;
     }
@@ -462,15 +462,16 @@ box box::sample_dimension(int dim) const {
             long rvalue = m_dist(rg);
             value = ((double)rvalue) / mult;
             exponent++;
-        } while ((value < lb || ub < value) && exponent <= 16);
-        std::cout << " " << exponent;
+        } while ((value < lb || ub < value) && exponent <= 64);
+        //std::cout << " " << exponent;
         if (value < lb || ub < value) {
-            std::cout << "Bad Precision" << std::endl;
+	  std::cout  << setprecision(100) << "Bad Precision " << value << " [" << lb << ", " << ub << "]" << std::endl;
             // ostringstream ss;
             // ss << setprecision(100) << " rvalue = " << rvalue << " mult = " << mult << " value =
             // " << value;
             // DREAL_LOG_DEBUG << ss.str();
-            exit(0);
+	    //            exit(0);
+	    b.set_empty();
         }
 
         b[dim] = ibex::Interval(value);

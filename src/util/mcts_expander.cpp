@@ -25,6 +25,7 @@ along with dReal. If not, see <http://www.gnu.org/licenses/>.
 #include <tuple>
 #include <vector>
 #include <string>
+#include <memory>
 #include "contractor/contractor.h"
 #include "contractor/contractor_exception.h"
 #include "contractor/contractor_status.h"
@@ -46,24 +47,29 @@ using std::endl;
 using std::numeric_limits;
 using std::mt19937_64;
 using std::chrono::system_clock;
+using std::weak_ptr;
 
 using dreal::icp_mcts_expander;
 using dreal::mcts_node;
 
-void icp_mcts_expander::expand(mcts_node * node) {
-    // DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node)";
+void icp_mcts_expander::expand(weak_ptr<mcts_node> node) {
+     DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node)";
 
-    icp_mcts_node * icp_node = NULL;
-
-    if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
-        vector<mcts_node *> * children = node->children();
+     icp_mcts_node * icp_node = NULL;
+     shared_ptr<mcts_node> snode = shared_ptr<mcts_node>(node.lock());
+     if ((icp_node = dynamic_cast<icp_mcts_node *>(&*snode))) {
+      vector<shared_ptr<mcts_node>> * children = snode->children();
 
         m_cs.m_box = icp_node->get_box();
+
+	DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) pruning";
         try {
             m_ctc.prune(m_cs);
         } catch (contractor_exception & e) {
             // Do nothing
         }
+
+	DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) splitting";
         if (!m_cs.m_box.is_empty()) {
             vector<int> const sorted_dims =
                 m_brancher.sort_branches(m_cs.m_box, m_ctrs, m_ctc.get_input(), m_cs.m_config, 1);
@@ -79,13 +85,17 @@ void icp_mcts_expander::expand(mcts_node * node) {
                 assert(second.get_idx_last_branched() == i);
 
                 if (!second.is_empty()) {
-                    children->push_back(new icp_mcts_node(second, node, this));
+		  shared_ptr<mcts_node> child = shared_ptr<mcts_node>(new icp_mcts_node(second, snode, this));
+		  child->set_sp(child);
+		  children->push_back(child);
                 }
                 if (!first.is_empty()) {
-                    children->push_back(new icp_mcts_node(first, node, this));
+		  shared_ptr<mcts_node> child = shared_ptr<mcts_node>(new icp_mcts_node(first, snode, this));
+		  child->set_sp(child);
+		  children->push_back(child);
                 }
 
-                //      DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) split";
+		DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) split";
 
                 if (m_cs.m_config.nra_proof) {
                     m_cs.m_config.nra_proof_out << "[branched on " << m_cs.m_box.get_name(i) << "]"
@@ -99,7 +109,7 @@ void icp_mcts_expander::expand(mcts_node * node) {
     }
     DREAL_LOG_INFO << "icp_mcts_expander::expand(mcts_node) exit";
 }
-double icp_mcts_expander::simulate(mcts_node * node) {
+double icp_mcts_expander::simulate(weak_ptr<mcts_node> node) {
     return simulate_steps(node);
 
     // icp_mcts_node * icp_node = NULL;
@@ -244,17 +254,19 @@ int get_step(std::string var, bool & at_start) {
     return step;
 }
 
-double icp_mcts_expander::simulate_steps(mcts_node * node) {
+double icp_mcts_expander::simulate_steps(weak_ptr<mcts_node> node) {
     icp_mcts_node * icp_node = NULL;
     // int simulation_steps = 0;
     box * last_non_empty_box = NULL;
 
     double average_score = 0;
-    int num_simulations = 10;
+    int num_simulations = 1;
+
+    shared_ptr<mcts_node> snode = shared_ptr<mcts_node>(node.lock());
 
     for (int sim = 0; sim < num_simulations; sim++) {
         DREAL_LOG_INFO << "icp_mcts_expander::simulate() run = " << sim;
-        if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
+        if ((icp_node = dynamic_cast<icp_mcts_node *>(&*snode))) {
             m_cs.m_box = icp_node->get_box();
             while (!m_cs.m_box.is_empty() &&
                    !m_cs.m_box.is_point()) {   // either not unsat or not sat
@@ -312,19 +324,20 @@ double icp_mcts_expander::simulate_steps(mcts_node * node) {
             }
         }
         average_score +=
-            (m_cs.m_box.is_empty() ? -1.0 * constraint_error(*last_non_empty_box) : 1.0);
+	  (m_cs.m_box.is_empty() ? -1.0 * log(constraint_error(*last_non_empty_box)) : 1.0);
 
         if (!m_cs.m_box.is_empty() && m_cs.m_box.is_point()) {
             // std::cout << "found sat" << std::endl;
             // DREAL_LOG_INFO << "icp_mcts_simulator::simulate() found sat";
             icp_mcts_node * icp_node = NULL;
-            if ((icp_node = dynamic_cast<icp_mcts_node *>(node))) {
+            if ((icp_node = dynamic_cast<icp_mcts_node *>(&*snode))) {
                 icp_node->add_sat_simulation_box(m_cs.m_box);
             }
-            node->set_solution(true);
+            snode->set_solution(true);
             break;
         }
     }
+    DREAL_LOG_INFO << "icp_mcts_simulator::simulate() exit, count = " << snode.use_count();
     return average_score / num_simulations;
 }
 

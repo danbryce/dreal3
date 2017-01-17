@@ -548,6 +548,7 @@ bool nra_solver::check(bool complete) {
             ncbt_icp::solve(m_ctc, m_cs);
         } else if (config.nra_mcts) {
             mcts_icp::solve(m_ctc, m_cs, m_stack);
+	    DREAL_LOG_DEBUG << "hi";
         } else if (config.nra_multiprune) {
             if (config.nra_sizegrad_brancher) {
                 SizeGradAsinhBrancher sb1(m_stack);

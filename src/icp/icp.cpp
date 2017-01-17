@@ -496,45 +496,51 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
     solns.clear();
 
     icp_mcts_expander expander(ctc, cs, ctrs, brancher);
-    icp_mcts_node * root = new icp_mcts_node(cs.m_box, &expander);
-
+    shared_ptr<icp_mcts_node> root (new icp_mcts_node(cs.m_box, &expander));
+    root->set_sp(root);
+    
     do {
-        DREAL_LOG_INFO << "mcts_icp::solve - loop"
+
+      
+      
+      DREAL_LOG_INFO << "mcts_icp::solve - loop"
                        << "\t"
                        << "graph Size = " << root->size();
 
+
+	
         // ofstream mcts_out;
         // mcts_out.open("mcts.dot");
         // root->draw_dot(mcts_out);
         // mcts_out.close();
-        // sleep(.5);
+        // sleep(1);
 
-        mcts_node * current = root;
-        mcts_node * last = current;
+      shared_ptr<mcts_node> current = root;
+      shared_ptr<mcts_node> last = current;
 
         // Get leaf node
-        while (!current->children()->empty()) {  // the node is an interior node
+      while (!current->children()->empty()) {  // the node is an interior node
             last = current;
             current = current->select();
             // DREAL_LOG_INFO << "mcts_icp::solve() selected node " << current->id();
         }
 
-        // DREAL_LOG_INFO << "mcts_icp::solve() expand";
+         DREAL_LOG_INFO << "mcts_icp::solve() expand";
 
         // generate leaf nodes and pick one
-        last = current->expand();
+	 last = current->expand();
 
-        if (last != NULL) {
-            // DREAL_LOG_INFO << "mcts_icp::solve() simulate";
+	 if (last) {
+	  DREAL_LOG_INFO << "mcts_icp::solve() simulate";
             // simulate to end: sat or unsat
-            last->simulate();
+            //last->simulate();
 
             if (last->is_solution()) {
                 cs.m_config.nra_found_soln++;
                 DREAL_LOG_INFO << "mcts_icp::solve() found solution, used #nodes = "
                                << root->size();
                 icp_mcts_node * inode = NULL;
-                if ((inode = dynamic_cast<icp_mcts_node *>(last))) {
+                if ((inode = dynamic_cast<icp_mcts_node *>(&*last))) {
                     cs.m_box = inode->get_sat_simulation_boxes().back();
                 }
                 if (cs.m_config.nra_multiple_soln > 1) {
@@ -552,26 +558,37 @@ void mcts_icp::solve(contractor & ctc, contractor_status & cs,
                 // root has no children, so unsat
                 return;
             } else if (current->is_solution()) {
-                current->simulate();
+	      current->simulate();
             } else {
                 // current is an unsat box
-                delete current;
-                current = NULL;
+	      // delete current;
+	      //current.reset();
+              //  current = NULL;
+	      DREAL_LOG_DEBUG << "Removing unsat node " << current->id();
+
+	      //remove current
+	      //remove pointer to it from its parent
+	      vector<shared_ptr<mcts_node>> * parent_children = current->parent().lock()->children();
+	      auto it = std::find(parent_children->begin(), parent_children->end(), current);
+	      parent_children->erase(it);
+	      
             }
 
             last = current;
         }
 
-        // DREAL_LOG_INFO << "mcts_icp::solve() backpropagate";
+         DREAL_LOG_INFO << "mcts_icp::solve() backpropagate";
 
         // backpropagate value
         current = last;
-        while (current != NULL) {  // the node is in the graph
-            current->backpropagate();
-            current = current->parent();
+        while (current) {  // the node is in the graph
+	  current->backpropagate();
+	  current = current->parent().lock();
         }
-    } while (true);
+    } while(!root->children()->empty());
 
-    delete root;
+    DREAL_LOG_INFO << "mcts_icp::solve() exit";
+    
+    //delete root;
 }
 }  // namespace dreal
